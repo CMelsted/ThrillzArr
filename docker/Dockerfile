@@ -48,12 +48,11 @@ COPY --from=mp4v2 /usr/local/bin/mp4* /usr/local/bin/
 COPY --from=mp4v2 /usr/local/lib/libmp4v2* /usr/local/lib/
 COPY --from=fdkaac /usr/local/bin/fdkaac /usr/local/bin/
 
-ARG M4B_TOOL_DOWNLOAD_LINK="https://github.com/sandreas/m4b-tool/releases/latest/download/m4b-tool.tar.gz"
+# Pinned: upstream's "latest" asset naming has changed before and broken builds
+ARG M4B_TOOL_DOWNLOAD_LINK="https://github.com/sandreas/m4b-tool/releases/download/v0.5.2/m4b-tool.phar"
 
 RUN echo "---- INSTALL M4B-TOOL ----" \
-    && wget "${M4B_TOOL_DOWNLOAD_LINK}" -O /tmp/m4b-tool.tar.gz \
-    && tar xzf /tmp/m4b-tool.tar.gz -C /tmp/ && rm /tmp/m4b-tool.tar.gz \
-    && mv /tmp/m4b-tool.phar /usr/local/bin/m4b-tool \
+    && wget "${M4B_TOOL_DOWNLOAD_LINK}" -O /usr/local/bin/m4b-tool \
     && chmod +x /usr/local/bin/m4b-tool
 
 # Where your code lives
