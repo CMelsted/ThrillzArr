@@ -134,18 +134,15 @@ class ImportView(TemplateView):
 
     def _drop_entry(self, request, input_dirs, src_path, is_ajax):
         input_dirs.remove(src_path)
-        request.session['input_dir'] = input_dirs
-
-        # Only navigate away if there's a pending review queue to send
-        # the user to - otherwise stay put, nothing left to do here
-        url = None
-        if not input_dirs:
+        if input_dirs:
+            request.session['input_dir'] = input_dirs
+        else:
             del request.session['input_dir']
-            if Book.objects.filter(
-                    status__status=StatusChoices.PENDING_REVIEW).exists():
-                url = reverse('review')
 
-        return self._respond(request, is_ajax, url=url)
+        # Stay on this page either way - accepting/removing the last
+        # entry doesn't navigate anywhere; the user decides when to
+        # move on to Review
+        return self._respond(request, is_ajax)
 
     @staticmethod
     def _respond(request, is_ajax, error=None, url=None):
@@ -237,7 +234,8 @@ class ReviewView(TemplateView):
             approved += 1
 
         if approved:
-            return redirect("books")
+            messages.success(
+                request, f"Approved {approved} book(s) for processing")
         return redirect("review")
 
 
