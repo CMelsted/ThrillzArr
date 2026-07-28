@@ -42,8 +42,16 @@
                 <div class="card-header-title">
                     <p class="title">Match books</p>
                 </div>
+                <div class="card-header-icon">
+                    <button class="button is-success" type="button" id="accept-all" onclick="acceptAll()">
+                        <span class="icon"><i class="fas fa-check-double"></i></span>
+                        <span>Accept All</span>
+                    </button>
+                </div>
             </div>
             <div class="card-content">
+                {% csrf_token %}
+                <div class="notification is-danger" id="match-error" style="display: none;"></div>
                 <div class="container">
                     {% for input in context %}
                     <div class="column is-grouped" id="asin-search-{{ forloop.counter|add:'-1' }}">
@@ -58,31 +66,23 @@
                                 <label class="label">{{ input.src_path|basename }}</label>
                             </div>
                         </div>
-                        <form action="{% url 'match' %}" method="POST">
-                            {% csrf_token %}
-                            <input type="hidden" name="src_path" value="{{ input.src_path }}">
-                            <div class="field is-flex is-flex-direction-column">
-                                <div class="control is-inline-flex is-align-items-center">
-                                    <div class="select is-loading mr-3 is-fullwidth">
-                                        <select class="asin-select" id="asin-select-{{ forloop.counter|add:'-1' }}" name="asin"
-                                            data-src-path="{{ input.src_path }}"
-                                            onchange="updateImage('{{ forloop.counter|add:'-1' }}'); checkSelectHasValue('{{ forloop.counter|add:'-1' }}')">
-                                            <option>{{ input.src_path }}</option>
-                                        </select>
-                                    </div>
-                                    <button class="button is-link" type="button" onclick="openSearchPanel('{{ input.src_path|escapejs }}', 'asin-select-{{ forloop.counter|add:"-1" }}')">Custom Search</button>
-                                    <button class="button is-success ml-2" type="submit" id="accept-{{ forloop.counter|add:'-1' }}" disabled>
-                                        <span class="icon"><i class="fas fa-check"></i></span>
-                                        <span>Accept</span>
-                                    </button>
+                        <div class="field is-flex is-flex-direction-column">
+                            <div class="control is-inline-flex is-align-items-center">
+                                <div class="select is-loading mr-3 is-fullwidth">
+                                    <select class="asin-select" id="asin-select-{{ forloop.counter|add:'-1' }}" name="asin"
+                                        data-src-path="{{ input.src_path }}"
+                                        onchange="updateImage('{{ forloop.counter|add:'-1' }}'); checkSelectHasValue('{{ forloop.counter|add:'-1' }}')">
+                                        <option>{{ input.src_path }}</option>
+                                    </select>
                                 </div>
+                                <button class="button is-link" type="button" onclick="openSearchPanel('{{ input.src_path|escapejs }}', 'asin-select-{{ forloop.counter|add:"-1" }}')">Custom Search</button>
+                                <button class="button is-success ml-2" type="button" id="accept-{{ forloop.counter|add:'-1' }}"
+                                    onclick="acceptEntry('{{ forloop.counter|add:'-1' }}')" disabled>
+                                    <span class="icon"><i class="fas fa-check"></i></span>
+                                    <span>Accept</span>
+                                </button>
                             </div>
-                        </form>
-                        <form action="{% url 'match' %}" method="POST" id="remove-form-{{ forloop.counter|add:'-1' }}">
-                            {% csrf_token %}
-                            <input type="hidden" name="action" value="remove">
-                            <input type="hidden" name="src_path" value="{{ input.src_path }}">
-                        </form>
+                        </div>
                     </div>
                     {% endfor %}
                 </div>

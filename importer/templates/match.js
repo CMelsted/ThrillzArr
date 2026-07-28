@@ -39,10 +39,89 @@ function closeRemoveConfirmationModal() {
     modal.classList.remove('is-active');
 }
 
-function removeColumn(column_index) {
-    // Submit the removal form so the server-side session list stays in
-    // sync; the page reloads without this entry
-    document.querySelector(`#remove-form-${column_index}`).submit();
+function showMatchError(message) {
+    const banner = document.getElementById("match-error");
+    banner.textContent = message;
+    banner.style.display = message ? "block" : "none";
+}
+
+async function postEntry(counter, action) {
+    const select = document.getElementById(`asin-select-${counter}`);
+    const body = new URLSearchParams({
+        csrfmiddlewaretoken: document.querySelector('input[name="csrfmiddlewaretoken"]').value,
+        src_path: select.dataset.srcPath,
+    });
+
+    if (action === "remove") {
+        body.append("action", "remove");
+    } else {
+        body.append("asin", select.value);
+    }
+
+    try {
+        const response = await fetch("match", {
+            method: "POST",
+            headers: { "X-Requested-With": "XMLHttpRequest" },
+            body: body,
+        });
+        return await response.json();
+    } catch (error) {
+        return { ok: false, error: `Could not reach the server: ${error}` };
+    }
+}
+
+// Returns false when the caller should stop (error, or we're navigating)
+function applyResult(counter, result) {
+    if (!result.ok) {
+        showMatchError(result.error);
+        return false;
+    }
+
+    showMatchError("");
+    document.querySelector(`#asin-search-${counter}`).remove();
+
+    if (result.url) {
+        window.location.href = result.url;
+        return false;
+    }
+    return true;
+}
+
+async function acceptEntry(counter) {
+    const button = document.getElementById(`accept-${counter}`);
+    button.classList.add("is-loading");
+    const result = await postEntry(counter, "accept");
+    button.classList.remove("is-loading");
+    applyResult(counter, result);
+}
+
+async function acceptAll() {
+    const button = document.getElementById("accept-all");
+    button.classList.add("is-loading");
+
+    let skipped = 0;
+    for (const select of Array.from(document.querySelectorAll(".asin-select"))) {
+        if (select.value.length !== 10) {
+            skipped++;
+            continue;
+        }
+        const counter = select.id.split("-").pop();
+        const result = await postEntry(counter, "accept");
+        if (!applyResult(counter, result)) {
+            break;
+        }
+    }
+
+    button.classList.remove("is-loading");
+    if (skipped) {
+        showMatchError(`${skipped} book(s) still need a match before they can be accepted.`);
+    }
+}
+
+async function removeColumn(counter) {
+    closeRemoveConfirmationModal();
+    const result = await postEntry(counter, "remove");
+    applyResult(counter, result);
 }
 
 function constructQueryParams(media_dir, title, author, keywords) {

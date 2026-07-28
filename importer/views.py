@@ -10,6 +10,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.http import HttpRequest, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.generic import TemplateView, View
 # core merge logic:
 from m4b_merge import helpers
@@ -82,61 +83,74 @@ class MatchView(TemplateView):
         return {"context": context}
 
     def post(self, request: HttpRequest):
+        # Accepting/removing one entry at a time is normally driven by
+        # fetch() so the remaining entries keep the matches already
+        # chosen for them; the form-post path is the no-JS fallback
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
         src_path = request.POST.get('src_path', '')
         input_dirs = request.session.get('input_dir', [])
 
         if src_path not in input_dirs:
-            messages.error(request, "Unknown item")
-            return redirect("match")
+            return self._respond(request, is_ajax, error="Unknown item")
 
         # Removing an entry from the match list
         if request.POST.get('action') == 'remove':
-            input_dirs.remove(src_path)
-            request.session['input_dir'] = input_dirs
-            return self._next_destination(request, input_dirs)
+            return self._drop_entry(request, input_dirs, src_path, is_ajax)
 
         # Accepting a single entry
         asin = request.POST.get('asin', '')
 
         # Check for validation errors
         if len(errors := Book.objects.book_asin_validator(asin)) > 0:
-            for k, v in errors.items():
-                messages.error(request, v)
-            return redirect("match")
+            return self._respond(
+                request, is_ajax, error='; '.join(errors.values()))
 
         if not (existing_settings := Setting.objects.first()):
-            messages.error(request, "Settings not set")
-            return redirect("setting")
+            return self._respond(
+                request, is_ajax, error="Settings not set",
+                url=reverse('setting'))
 
         # Check that asin actually returns data from audible
         try:
             helpers.validate_asin(existing_settings.api_url, asin)
         except ValueError:
-            messages.error(request, "Bad ASIN: " + asin)
-            return redirect("match")
+            return self._respond(request, is_ajax, error="Bad ASIN: " + asin)
 
         original_path = Path(src_path)
         if not helpers.get_directory(original_path):
-            messages.error(request, f"No supported files in {original_path}")
-            return redirect("match")
+            return self._respond(
+                request, is_ajax,
+                error=f"No supported files in {original_path}")
 
         logger.info(f"Making models for: {original_path}")
         book = create_book(asin, original_path)
         logger.info(f"Book {book} is now awaiting review")
 
+        return self._drop_entry(request, input_dirs, src_path, is_ajax)
+
+    def _drop_entry(self, request, input_dirs, src_path, is_ajax):
         input_dirs.remove(src_path)
         request.session['input_dir'] = input_dirs
-        return self._next_destination(request, input_dirs)
+
+        # Nothing left to match, so move the user on
+        url = None
+        if not input_dirs:
+            del request.session['input_dir']
+            url = reverse('review') if Book.objects.filter(
+                status__status=StatusChoices.PENDING_REVIEW
+            ).exists() else reverse('import')
+
+        return self._respond(request, is_ajax, url=url)
 
     @staticmethod
-    def _next_destination(request, input_dirs):
-        if input_dirs:
+    def _respond(request, is_ajax, error=None, url=None):
+        if is_ajax:
+            return JsonResponse(
+                {'ok': error is None, 'error': error, 'url': url})
+        if error:
+            messages.error(request, error)
             return redirect("match")
-        del request.session['input_dir']
-        if Book.objects.filter(
-                status__status=StatusChoices.PENDING_REVIEW).exists():
-            return redirect("review")
-        return redirect("import")
+        return redirect(url) if url else redirect("match")
 
 
 class ReviewView(TemplateView):
@@ -464,6 +478,10 @@ class PresetsView(TemplateView):
         if action.startswith('delete:'):
             preset = get_object_or_404(
                 ConversionPreset, pk=action.split(':', 1)[1])
+            # Books fall back to a preset, so one must always survive
+            if ConversionPreset.objects.count() <= 1:
+                messages.error(request, "At least one preset is required")
+                return redirect("presets")
             was_default = preset.is_default
             preset.delete()
             # Promote another preset so a default always exists

@@ -40,12 +40,14 @@
                                     <a class="button" href="{% url 'presets' %}?edit={{ preset.pk }}">
                                         <span class="icon"><i class="fas fa-pen"></i></span>
                                     </a>
+                                    {% if presets|length > 1 %}
                                     <form action="{% url 'presets' %}" method="POST">
                                         {% csrf_token %}
                                         <button class="button is-danger is-outlined" type="submit" name="action" value="delete:{{ preset.pk }}">
                                             <span class="icon"><i class="fas fa-trash"></i></span>
                                         </button>
                                     </form>
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>
