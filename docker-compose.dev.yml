@@ -1,0 +1,21 @@
+# Development/verification compose file — builds the image from the local
+# Dockerfile and mounts throwaway dev-data/ dirs instead of real volumes.
+# Usage: ./scripts/verify-dev.sh   (or: docker compose -f docker-compose.dev.yml up --build)
+services:
+  bragibooks:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: thrillzarr-dev
+    ports:
+      - "8000:8000"
+    environment:
+      - LOG_LEVEL=DEBUG
+      - DEBUG=True
+      - UID=${UID:-1000}
+      - GID=${GID:-1000}
+      - CELERY_WORKERS=1
+    volumes:
+      - ./dev-data/input:/input
+      - ./dev-data/output:/output
+      - ./dev-data/config:/config
