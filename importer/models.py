@@ -57,7 +57,6 @@ class ConversionPreset(models.Model):
     move_to_audiobookshelf = models.BooleanField(default=False)
     audiobookshelf_library_path = models.CharField(
         max_length=255, blank=True, default='')
-    delete_source_after_success = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -132,10 +131,9 @@ class Narrator(models.Model):
 
 class Setting(models.Model):
     api_url = models.CharField(max_length=255)
-    completed_directory = models.CharField(max_length=255)
-    input_directory = models.CharField(max_length=255)
+    completed_directory = models.CharField(max_length=255, blank=True, default='')
     num_cpus = models.IntegerField()
-    output_directory = models.CharField(max_length=255)
+    delete_source_after_success = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     objects = SettingManager()

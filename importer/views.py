@@ -91,45 +91,61 @@ class MatchView(TemplateView):
         return {"context": context}
 
     def post(self, request: HttpRequest):
-        created_books = False
-        for key, asin in request.POST.items():
+        src_path = request.POST.get('src_path', '')
+        input_dirs = request.session.get('input_dir', [])
 
-            if key == "csrfmiddlewaretoken":
-                continue
-
-            # Check for validation errors
-            if len(errors := Book.objects.book_asin_validator(asin)) > 0:
-                for k, v in errors.items():
-                    messages.error(request, v)
-                return redirect("match")
-
-            if not (existing_settings := Setting.objects.first()):
-                messages.error(request, "Settings not set")
-                return redirect("setting")
-
-            # Check that asin actually returns data from audible
-            try:
-                helpers.validate_asin(existing_settings.api_url, asin)
-            except ValueError:
-                messages.error(request, "Bad ASIN: " + asin)
-                return redirect("match")
-
-            original_path = Path(key)
-            if not helpers.get_directory(original_path):
-                messages.error(request, f"No supported files in {original_path}")
-                continue
-
-            logger.info(f"Making models for: {original_path}")
-
-            book = create_book(asin, original_path)
-            created_books = True
-
-            logger.info(f"Book {book} is now awaiting review")
-
-        if created_books:
-            return redirect("review")
-        else:
+        if src_path not in input_dirs:
+            messages.error(request, "Unknown item")
             return redirect("match")
+
+        # Removing an entry from the match list
+        if request.POST.get('action') == 'remove':
+            input_dirs.remove(src_path)
+            request.session['input_dir'] = input_dirs
+            return self._next_destination(request, input_dirs)
+
+        # Accepting a single entry
+        asin = request.POST.get('asin', '')
+
+        # Check for validation errors
+        if len(errors := Book.objects.book_asin_validator(asin)) > 0:
+            for k, v in errors.items():
+                messages.error(request, v)
+            return redirect("match")
+
+        if not (existing_settings := Setting.objects.first()):
+            messages.error(request, "Settings not set")
+            return redirect("setting")
+
+        # Check that asin actually returns data from audible
+        try:
+            helpers.validate_asin(existing_settings.api_url, asin)
+        except ValueError:
+            messages.error(request, "Bad ASIN: " + asin)
+            return redirect("match")
+
+        original_path = Path(src_path)
+        if not helpers.get_directory(original_path):
+            messages.error(request, f"No supported files in {original_path}")
+            return redirect("match")
+
+        logger.info(f"Making models for: {original_path}")
+        book = create_book(asin, original_path)
+        logger.info(f"Book {book} is now awaiting review")
+
+        input_dirs.remove(src_path)
+        request.session['input_dir'] = input_dirs
+        return self._next_destination(request, input_dirs)
+
+    @staticmethod
+    def _next_destination(request, input_dirs):
+        if input_dirs:
+            return redirect("match")
+        del request.session['input_dir']
+        if Book.objects.filter(
+                status__status=StatusChoices.PENDING_REVIEW).exists():
+            return redirect("review")
+        return redirect("import")
 
 
 class ReviewView(TemplateView):
@@ -298,22 +314,26 @@ class AbandonJobView(View):
 
 
 class ClearJobsView(View):
-    def post(self, request):
-        book_ids = request.POST.getlist('book_ids')
-        if not book_ids:
-            messages.error(request, "No jobs selected")
-            return redirect("books")
+    # Clearing removes DB records only; output/source files are untouched
+    CLEARABLE = [StatusChoices.DONE, StatusChoices.ERROR,
+                 StatusChoices.ABANDONED]
 
-        # Only Error/Abandoned jobs may be cleared; deleting the Status
-        # cascades to the Book
-        statuses = Status.objects.filter(
-            book__pk__in=book_ids,
-            status__in=[StatusChoices.ERROR, StatusChoices.ABANDONED]
-        )
+    def post(self, request):
+        if request.POST.get('action') == 'clear_all_done':
+            statuses = Status.objects.filter(status=StatusChoices.DONE)
+        else:
+            book_ids = request.POST.getlist('book_ids')
+            if not book_ids:
+                messages.error(request, "No books selected")
+                return redirect("books")
+            statuses = Status.objects.filter(
+                book__pk__in=book_ids, status__in=self.CLEARABLE)
+
         count = statuses.count()
+        # Deleting the Status cascades to the Book
         statuses.delete()
 
-        messages.success(request, f"Cleared {count} job(s)")
+        messages.success(request, f"Cleared {count} book(s)")
         return redirect("books")
 
 
@@ -481,61 +501,42 @@ class SettingView(TemplateView):
         existing_settings = Setting.objects.first()
         default_data = {
             'api_url': 'https://api.audnex.us',
-            'completed_directory': '/input/done',
-            'input_directory': '/input',
             'num_cpus': 0,
-            'output_directory': '/output'
         }
         if existing_settings:
             form = SettingForm(instance=existing_settings)
         else:
             form = SettingForm(initial=default_data)
-        all_settings = Setting.objects.first()
 
         context = {
             "form": form,
-            "settings": all_settings,
+            "settings": existing_settings,
         }
         return context
 
     def post(self, request):
         existing_settings = Setting.objects.first()
 
-        form = SettingForm(request.POST)
+        form = SettingForm(request.POST, instance=existing_settings)
         if form.is_valid():
-            paths_to_check = [
-                'completed_directory',
-                'input_directory',
-                'output_directory'
-            ]
             form_data = form.cleaned_data
 
-            # Check file path validity
-            for path in paths_to_check:
-                errors = Setting.objects.file_path_validator(form_data[path])
+            # Check file path validity (only when moving is enabled)
+            if form_data['completed_directory']:
+                errors = Setting.objects.file_path_validator(
+                    form_data['completed_directory'])
                 if len(errors) > 0:
                     for k, v in errors.items():
                         messages.error(request, v)
                     return redirect("setting")
-            if not existing_settings:
-                settings = Setting.objects.create(
-                    api_url=form_data['api_url'],
-                    completed_directory=form_data['completed_directory'],
-                    input_directory=form_data['input_directory'],
-                    num_cpus=form_data['num_cpus'],
-                    output_directory=form_data['output_directory']
-                )
-                settings.save()
-            else:
-                es = existing_settings
-                es.api_url = form_data['api_url']
-                es.completed_directory = form_data['completed_directory']
-                es.input_directory = form_data['input_directory']
-                es.num_cpus = form_data['num_cpus']
-                es.output_directory = form_data['output_directory']
-                es.save()
+
+            setting = form.save(commit=False)
+            setting.completed_directory = form_data['completed_directory']
+            setting.save()
 
             return redirect("import")
 
-        messages.error(request, "Form is invalid")
+        for field, errors in form.errors.items():
+            for error in errors:
+                messages.error(request, f"{field}: {error}")
         return redirect("setting")

@@ -12,7 +12,30 @@
 
     <div class="tab-content">
         <div class="tab-pane" id="done">
-            {% include "book_list.html" with books=done_books %}
+            <form action="{% url 'clear-jobs' %}" method="POST">
+                {% csrf_token %}
+                {% if done_books %}
+                <div class="level">
+                    <div class="level-left"></div>
+                    <div class="level-right">
+                        <div class="level-item">
+                            <button class="button is-danger is-outlined" type="submit">
+                                <span class="icon"><i class="fas fa-trash"></i></span>
+                                <span>Clear selected</span>
+                            </button>
+                        </div>
+                        <div class="level-item">
+                            <button class="button is-danger" type="submit" name="action" value="clear_all_done"
+                                onclick="return confirm('Clear ALL books from the Done list? (Files are not deleted)')">
+                                <span class="icon"><i class="fas fa-trash"></i></span>
+                                <span>Clear all</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                {% include "book_list.html" with books=done_books selectable=True %}
+            </form>
         </div>
         <div class="tab-pane" id="processing" style="display: none;">
             {% include "book_list.html" with books=processing_books show_progress=True %}

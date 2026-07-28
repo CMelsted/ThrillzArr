@@ -32,17 +32,6 @@ flex-direction: column;
 word-break: break-all;
 }
 
-.control.has-icons-right .icon {
-pointer-events: auto;
-}
-
-.clear-search {
-cursor: default;
-}
-
-.has-icons-right {
-position: relative;
-}
 {% endblock %}
 {% load directory_explorer_tags %}
 {% block content %}
@@ -50,19 +39,8 @@ position: relative;
     <div class="column">
         <nav class="panel">
             <p class="panel-heading">
-                Choose Files or Directories to process
+                Choose books below for processing
             </p>
-            <div class="panel-block">
-                <p class="control has-icons-left has-icons-right">
-                    <input class="input" id="search-input" type="text" placeholder="Search">
-                    <span class="icon is-left">
-                        <i class="fas fa-search" aria-hidden="false"></i>
-                    </span>
-                    <span class="icon is-right clear-search">
-                        <i class="fas fa-times" aria-hidden="false"></i>
-                    </span>
-                </p>
-            </div>
             <label class="panel-block">
                 <input type="checkbox" id="select-all-checkbox">
                 Select All

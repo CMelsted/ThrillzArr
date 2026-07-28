@@ -16,7 +16,15 @@ from importer.models import (Author, Book, ConversionPreset, Narrator,
 logger = logging.getLogger(__name__)
 
 
+def output_dir() -> str:
+    # Output location comes from the deploy-time bind mount, not settings
+    if Path('/output').is_dir():
+        return '/output'
+    return str(Path.home() / 'output')
+
+
 def set_configs(book=None):
+    config.output = output_dir()
     existing_settings = Setting.objects.first()
     if existing_settings:
         config.api_url = existing_settings.api_url
@@ -25,7 +33,6 @@ def set_configs(book=None):
             existing_settings.num_cpus if existing_settings.num_cpus > 0
             else os.cpu_count()
         )
-        config.output = existing_settings.output_directory
 
     preset = None
     if book:
@@ -127,7 +134,8 @@ def _post_process(book, m4b):
             shutil.move(str(chapters_file), f"{target_base}.chapters.txt")
         dest = Path(f"{target_base}.m4b")
 
-    if preset and preset.delete_source_after_success:
+    existing_settings = Setting.objects.first()
+    if existing_settings and existing_settings.delete_source_after_success:
         m4b.cleanup_cover()
         src = Path(book.src_path)
         logger.info(f"Deleting source input: {src}")

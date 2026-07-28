@@ -3,29 +3,48 @@ from .models import Book, ConversionPreset, Setting
 
 
 class SettingForm(forms.ModelForm):
+    move_completed_enabled = forms.BooleanField(
+        required=False,
+        label='Move original input files to a folder after completion',
+        widget=forms.CheckboxInput(attrs={'id': 'move-completed-enabled'})
+    )
+
     class Meta:
         model = Setting
         fields = (
             'api_url',
-            'completed_directory',
-            'input_directory',
             'num_cpus',
-            'output_directory'
+            'delete_source_after_success',
+            'completed_directory'
         )
         labels = {
             'api_url': 'Custom API URL',
-            'completed_directory': 'Directory for copy of original input files. Leave blank to disable moving.',
-            'input_directory': 'Input directory path',
             'num_cpus': 'Number of CPUs to use (0 will use all available)',
-            'output_directory': 'Output directory path'
+            'delete_source_after_success': 'Delete source files after successful conversion',
+            'completed_directory': 'Folder to move original input files into'
         }
         widgets = {
             'api_url': forms.URLInput(attrs={'class': 'input is-fullwidth'}),
-            'completed_directory': forms.TextInput(attrs={'class': 'input is-fullwidth', "required": False}),
-            'input_directory': forms.TextInput(attrs={'class': 'input is-fullwidth'}),
             'num_cpus': forms.NumberInput(attrs={'class': 'input is-fullwidth'}),
-            'output_directory': forms.TextInput(attrs={'class': 'input is-fullwidth'}),
+            'completed_directory': forms.TextInput(attrs={'class': 'input is-fullwidth', "required": False}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        instance = kwargs.get('instance')
+        if instance and instance.completed_directory:
+            self.fields['move_completed_enabled'].initial = True
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if not cleaned_data.get('move_completed_enabled'):
+            cleaned_data['completed_directory'] = ''
+        elif not cleaned_data.get('completed_directory'):
+            self.add_error(
+                'completed_directory',
+                'A folder path is required when moving is enabled'
+            )
+        return cleaned_data
 
 
 class PresetForm(forms.ModelForm):
@@ -36,16 +55,14 @@ class PresetForm(forms.ModelForm):
             'is_default',
             'output_scheme',
             'move_to_audiobookshelf',
-            'audiobookshelf_library_path',
-            'delete_source_after_success'
+            'audiobookshelf_library_path'
         )
         labels = {
             'name': 'Preset name',
             'is_default': 'Use as default preset',
             'output_scheme': 'Output path format',
             'move_to_audiobookshelf': 'Move completed books into an Audiobookshelf library folder',
-            'audiobookshelf_library_path': 'Audiobookshelf library folder path',
-            'delete_source_after_success': 'Delete source files after successful conversion'
+            'audiobookshelf_library_path': 'Audiobookshelf library folder path'
         }
         widgets = {
             'name': forms.TextInput(attrs={'class': 'input is-fullwidth'}),

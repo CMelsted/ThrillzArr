@@ -40,14 +40,9 @@ function closeRemoveConfirmationModal() {
 }
 
 function removeColumn(column_index) {
-    const columnToRemove = document.querySelector(`#asin-search-${column_index}`);
-    columnToRemove.remove();
-
-    // Close the modal
-    closeRemoveConfirmationModal();
-
-    // Check all searches have values
-    checkAllSelectsHaveValue();
+    // Submit the removal form so the server-side session list stays in
+    // sync; the page reloads without this entry
+    document.querySelector(`#remove-form-${column_index}`).submit();
 }
 
 function constructQueryParams(media_dir, title, author, keywords) {
@@ -131,21 +126,16 @@ function updateImage(counter) {
     }
 }
 
+function checkSelectHasValue(counter) {
+    const select = document.getElementById(`asin-select-${counter}`);
+    const acceptButton = document.getElementById(`accept-${counter}`);
+    acceptButton.disabled = select.value.length != 10;
+}
+
 function checkAllSelectsHaveValue() {
-    var hasValues = true;
-
     document.querySelectorAll(".asin-select").forEach(select => {
-        if (select.value.length != 10) {
-            hasValues = false;
-            return;
-        }
+        checkSelectHasValue(select.id.split('-').pop());
     });
-
-    if (!hasValues) {
-        document.getElementById("match-form-submit").disabled = true;
-    } else {
-        document.getElementById("match-form-submit").disabled = false;
-    }
 }
 
 async function searchAsin(title, author, keywords) {
@@ -184,7 +174,7 @@ async function fetchOptions() {
     const selects = document.querySelectorAll(".asin-select");
 
     const searchPromises = Array.from(selects).map(async select => {
-        const url = "asin-search" + constructQueryParams(select.name.split('/').pop());
+        const url = "asin-search" + constructQueryParams(select.dataset.srcPath.split('/').pop());
 
         const data = await search(url);
         updateOptions(select, data);

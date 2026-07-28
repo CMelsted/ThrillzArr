@@ -5,6 +5,31 @@
         <div class="card">
             <div class="card-header is-center">
                 <div class="card-header-title">
+                    <p class="title">Appearance</p>
+                </div>
+            </div>
+            <div class="card-content">
+                <div class="level">
+                    <div class="level-left">
+                        <div class="level-item">
+                            <p>Light / dark mode</p>
+                        </div>
+                    </div>
+                    <div class="level-right">
+                        <div class="level-item">
+                            <button class="button theme-toggle" id="theme-toggle" type="button" title="Toggle light/dark mode" aria-label="Toggle light/dark mode">
+                                <span class="icon"><i class="fas fa-moon" id="theme-toggle-icon"></i></span>
+                                <span id="theme-toggle-label">Dark mode</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="block"></div>
+        <div class="card">
+            <div class="card-header is-center">
+                <div class="card-header-title">
                     <p class="title">Settings</p>
                 </div>
             </div>
@@ -12,13 +37,20 @@
                 {% csrf_token %}
                 <div class="card-content">
                     {% for field in form %}
-                        <div class="field is-horizontal">
+                        <div class="field is-horizontal" {% if field.name == "completed_directory" %}id="completed-directory-field"{% endif %}>
                             <div class="field-body">
                                 <div class="field">
+                                    {% if field.name == "delete_source_after_success" or field.name == "move_completed_enabled" %}
+                                    <label class="checkbox">
+                                        {{ field }}
+                                        {{ field.label }}
+                                    </label>
+                                    {% else %}
                                     {{ field.label_tag }}
                                     <div class="control">
                                         {{ field }}
                                     </div>
+                                    {% endif %}
                                 </div>
                             </div>
                         </div>
@@ -35,4 +67,38 @@
         </div>
     </div>
 </div>
+{% endblock %}
+{% block script %}
+(function () {
+    // Theme toggle
+    const icon = document.getElementById("theme-toggle-icon");
+    const label = document.getElementById("theme-toggle-label");
+
+    function applyIcon() {
+        const dark = document.documentElement.dataset.theme === "dark";
+        icon.classList.toggle("fa-sun", dark);
+        icon.classList.toggle("fa-moon", !dark);
+        label.textContent = dark ? "Switch to light mode" : "Switch to dark mode";
+    }
+
+    document.getElementById("theme-toggle").addEventListener("click", function () {
+        const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+        document.documentElement.dataset.theme = next;
+        localStorage.setItem("theme", next);
+        applyIcon();
+    });
+
+    applyIcon();
+
+    // Show the completed-directory path only when moving is enabled
+    const moveCheckbox = document.getElementById("move-completed-enabled");
+    const pathField = document.getElementById("completed-directory-field");
+
+    function applyPathVisibility() {
+        pathField.style.display = moveCheckbox.checked ? "" : "none";
+    }
+
+    moveCheckbox.addEventListener("change", applyPathVisibility);
+    applyPathVisibility();
+})();
 {% endblock %}
