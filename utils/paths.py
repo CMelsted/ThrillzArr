@@ -2,17 +2,23 @@ import os
 from pathlib import Path
 
 def input_dir() -> str:
-    # Input location comes from the deploy-time bind mount, not settings
+    # Input location comes from the deploy-time bind mount, not settings.
+    # The mount is guaranteed to exist under Docker; the ~/input fallback
+    # (running outside Docker) is not, so create it on first use.
     if Path('/input').is_dir():
         return '/input'
-    return str(Path.home() / 'input')
+    path = Path.home() / 'input'
+    path.mkdir(parents=True, exist_ok=True)
+    return str(path)
 
 
 def output_dir() -> str:
     # Output location comes from the deploy-time bind mount, not settings
     if Path('/output').is_dir():
         return '/output'
-    return str(Path.home() / 'output')
+    path = Path.home() / 'output'
+    path.mkdir(parents=True, exist_ok=True)
+    return str(path)
 
 
 def excluded_input_paths() -> set:
