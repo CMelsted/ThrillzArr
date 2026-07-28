@@ -52,7 +52,7 @@ def directory_contents(path):
 
 
 @register.inclusion_tag("directory_contents.html")
-def render_directory(path, folder_id, depth, session_paths):
+def render_directory(path, folder_id, depth, hidden_paths):
     """
     Renders a directory and its contents as a nested list.
     """
@@ -63,5 +63,5 @@ def render_directory(path, folder_id, depth, session_paths):
         "display": "none" if int(depth) > 0 else "",
         "folder_id": f"{folder_id}",
         "depth": depth,
-        "session_paths": session_paths,
+        "hidden_paths": hidden_paths,
     }

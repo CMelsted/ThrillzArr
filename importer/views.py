@@ -57,9 +57,18 @@ class ImportView(TemplateView):
             else:
                 match_context.append({'src_path': this_dir, 'asin': book.asin})
 
+        # Anything currently queued for matching, or already accepted
+        # into a Book - at any stage of its journey (pending review,
+        # processing, done, error, abandoned) - must not be offered for
+        # import again. A Book's tracking record only ever goes away via
+        # Discard/Clear Entry/Clear all, so once one of those happens the
+        # path naturally becomes importable again on the next page load.
+        hidden_paths = set(input_dirs) | set(
+            Book.objects.values_list('src_path', flat=True))
+
         return {
             "contents": importable_contents(input_dir()),
-            "session_paths": set(input_dirs),
+            "hidden_paths": hidden_paths,
             "context": match_context,
         }
 
