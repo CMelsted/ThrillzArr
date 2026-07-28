@@ -90,15 +90,30 @@
 
     applyIcon();
 
-    // Show the completed-directory path only when moving is enabled
+    // Show the completed-directory path only when moving is enabled;
+    // moving and deleting the originals are mutually exclusive
     const moveCheckbox = document.getElementById("move-completed-enabled");
+    const deleteCheckbox = document.getElementById("delete-source-enabled");
     const pathField = document.getElementById("completed-directory-field");
 
     function applyPathVisibility() {
         pathField.style.display = moveCheckbox.checked ? "" : "none";
     }
 
-    moveCheckbox.addEventListener("change", applyPathVisibility);
+    moveCheckbox.addEventListener("change", function () {
+        if (moveCheckbox.checked) {
+            deleteCheckbox.checked = false;
+        }
+        applyPathVisibility();
+    });
+
+    deleteCheckbox.addEventListener("change", function () {
+        if (deleteCheckbox.checked) {
+            moveCheckbox.checked = false;
+            applyPathVisibility();
+        }
+    });
+
     applyPathVisibility();
 })();
 {% endblock %}

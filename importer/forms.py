@@ -5,9 +5,19 @@ from .models import Book, ConversionPreset, Setting
 class SettingForm(forms.ModelForm):
     move_completed_enabled = forms.BooleanField(
         required=False,
+        initial=True,
         label='Move original input files to a folder after completion',
         widget=forms.CheckboxInput(attrs={'id': 'move-completed-enabled'})
     )
+
+    # The move checkbox must render directly above the path it controls
+    field_order = [
+        'api_url',
+        'num_cpus',
+        'delete_source_after_success',
+        'move_completed_enabled',
+        'completed_directory',
+    ]
 
     class Meta:
         model = Setting
@@ -26,18 +36,28 @@ class SettingForm(forms.ModelForm):
         widgets = {
             'api_url': forms.URLInput(attrs={'class': 'input is-fullwidth'}),
             'num_cpus': forms.NumberInput(attrs={'class': 'input is-fullwidth'}),
+            'delete_source_after_success': forms.CheckboxInput(attrs={'id': 'delete-source-enabled'}),
             'completed_directory': forms.TextInput(attrs={'class': 'input is-fullwidth', "required": False}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        instance = kwargs.get('instance')
-        if instance and instance.completed_directory:
-            self.fields['move_completed_enabled'].initial = True
+        if self.instance and self.instance.pk:
+            self.fields['move_completed_enabled'].initial = bool(
+                self.instance.completed_directory)
 
     def clean(self):
         cleaned_data = super().clean()
-        if not cleaned_data.get('move_completed_enabled'):
+        move_enabled = cleaned_data.get('move_completed_enabled')
+
+        # Moving the originals and deleting them are contradictory
+        if move_enabled and cleaned_data.get('delete_source_after_success'):
+            raise forms.ValidationError(
+                'Moving original files and deleting them are mutually '
+                'exclusive - choose one.'
+            )
+
+        if not move_enabled:
             cleaned_data['completed_directory'] = ''
         elif not cleaned_data.get('completed_directory'):
             self.add_error(

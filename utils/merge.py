@@ -11,16 +11,10 @@ from m4b_merge import audible_helper, config, helpers, m4b_helper
 
 from importer.models import (Author, Book, ConversionPreset, Narrator,
                              Setting, Status, StatusChoices)
+from utils.paths import output_dir
 
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
-
-
-def output_dir() -> str:
-    # Output location comes from the deploy-time bind mount, not settings
-    if Path('/output').is_dir():
-        return '/output'
-    return str(Path.home() / 'output')
 
 
 def set_configs(book=None):

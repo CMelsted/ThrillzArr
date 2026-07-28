@@ -23,19 +23,10 @@
             <div class="column is-three-quarter">
                 <div class="box">
                     <div class="level">
-                        <div class="level-left">
-                            {% if selectable %}
-                            <div class="level-item">
-                                <label class="checkbox">
-                                    <input type="checkbox" name="book_ids" value="{{ book.pk }}">
-                                    Select
-                                </label>
-                            </div>
-                            {% endif %}
-                        </div>
+                        <div class="level-left"></div>
                         <div class="level-right">
-                            {% if show_progress %}
                             <div class="level-item">
+                                {% if show_progress %}
                                 <form action="{% url 'abandon-job' book.pk %}" method="POST">
                                     {% csrf_token %}
                                     <button class="button is-danger is-outlined is-small" type="submit">
@@ -43,15 +34,18 @@
                                         <span>Abandon</span>
                                     </button>
                                 </form>
+                                {% elif clearable %}
+                                <form action="{% url 'clear-jobs' %}" method="POST">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="book_id" value="{{ book.pk }}">
+                                    <button class="button is-danger is-outlined is-small" type="submit"
+                                        onclick="return confirm('Remove this book from the list? Files on disk are not deleted.')">
+                                        <span class="icon"><i class="fas fa-trash"></i></span>
+                                        <span>Clear Entry</span>
+                                    </button>
+                                </form>
+                                {% endif %}
                             </div>
-                            {% else %}
-                            <div class="level-item">
-                                <a class="button is-small" href="{% url 'edit-book' book.pk %}">
-                                    <span class="icon"><i class="fas fa-pen"></i></span>
-                                    <span>Edit</span>
-                                </a>
-                            </div>
-                            {% endif %}
                         </div>
                     </div>
                     {% if show_progress %}

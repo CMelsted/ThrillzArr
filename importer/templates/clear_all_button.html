@@ -1,0 +1,16 @@
+<div class="level">
+    <div class="level-left"></div>
+    <div class="level-right">
+        <div class="level-item">
+            <form action="{% url 'clear-jobs' %}" method="POST">
+                {% csrf_token %}
+                <input type="hidden" name="clear_all" value="{{ status }}">
+                <button class="button is-danger" type="submit"
+                    onclick="return confirm('Remove ALL books from the {{ status }} list? Files on disk are not deleted.')">
+                    <span class="icon"><i class="fas fa-trash"></i></span>
+                    <span>Clear all</span>
+                </button>
+            </form>
+        </div>
+    </div>
+</div>

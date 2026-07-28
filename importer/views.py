@@ -17,6 +17,8 @@ from m4b_merge import helpers
 from bragibooks_proj.celery import app as celery_app
 # Import Merge functions for django
 from utils.merge import create_book, set_book_people
+# Import path helpers (locations come from the deploy-time bind mounts)
+from utils.paths import importable_contents, input_dir
 # Import Search tools
 from utils.search_tools import ScoreTool, SearchTool
 
@@ -29,23 +31,12 @@ from .tasks import m4b_merge_task
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
 
-# If using docker, default to /input folder, else $USER/input
-if Path('/input').is_dir():
-    rootdir = "/input"
-else:
-    rootdir = f"{str(Path.home())}/input"
-
 
 class ImportView(TemplateView):
     template_name = "importer.html"
 
     def get_context_data(self, **kwargs):
-        context = {
-            "contents": sorted(
-                Path(rootdir).iterdir(), key=os.path.getmtime, reverse=True
-            )
-        }
-        return context
+        return {"contents": importable_contents(input_dir())}
 
     def post(self, request):
         # Redirect if this is a new session
@@ -319,15 +310,16 @@ class ClearJobsView(View):
                  StatusChoices.ABANDONED]
 
     def post(self, request):
-        if request.POST.get('action') == 'clear_all_done':
-            statuses = Status.objects.filter(status=StatusChoices.DONE)
-        else:
-            book_ids = request.POST.getlist('book_ids')
-            if not book_ids:
-                messages.error(request, "No books selected")
-                return redirect("books")
+        if clear_all := request.POST.get('clear_all'):
+            if clear_all not in self.CLEARABLE:
+                return HttpResponseBadRequest("Unknown status")
+            statuses = Status.objects.filter(status=clear_all)
+        elif book_id := request.POST.get('book_id'):
             statuses = Status.objects.filter(
-                book__pk__in=book_ids, status__in=self.CLEARABLE)
+                book__pk=book_id, status__in=self.CLEARABLE)
+        else:
+            messages.error(request, "No books selected")
+            return redirect("books")
 
         count = statuses.count()
         # Deleting the Status cascades to the Book
@@ -502,6 +494,7 @@ class SettingView(TemplateView):
         default_data = {
             'api_url': 'https://api.audnex.us',
             'num_cpus': 0,
+            'completed_directory': f"{input_dir()}/done",
         }
         if existing_settings:
             form = SettingForm(instance=existing_settings)

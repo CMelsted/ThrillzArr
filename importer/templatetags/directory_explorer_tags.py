@@ -1,8 +1,9 @@
 import logging
-from pathlib import Path
 import uuid
 from django import template
 import os
+
+from utils.paths import importable_contents
 
 logger = logging.getLogger(__name__)
 register = template.Library()
@@ -39,9 +40,10 @@ def generate_id(_):
 
 def directory_contents(path):
     """
-    Returns a list of files and subdirectories in the given path.
+    Returns a list of files and subdirectories in the given path,
+    excluding locations books get moved to after processing.
     """
-    return sorted(Path(path).iterdir(), key=os.path.getmtime, reverse=True)
+    return importable_contents(path)
 
 
 @register.inclusion_tag("directory_contents.html")
