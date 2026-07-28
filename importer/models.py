@@ -30,17 +30,51 @@ class SettingManager(models.Manager):
 
 
 class StatusChoices(models.TextChoices):
+    PENDING_REVIEW = "Pending Review"
     PROCESSING = "Processing"
     DONE = "Done"
     ERROR = "Error"
+    ABANDONED = "Abandoned"
 
 
 class Status(models.Model):
-    status = models.CharField(max_length=10, choices=StatusChoices.choices)
+    status = models.CharField(max_length=20, choices=StatusChoices.choices)
     message = models.TextField()
+    progress_percent = models.IntegerField(default=0)
+    stage = models.CharField(max_length=100, blank=True, default='')
+    task_id = models.CharField(max_length=255, blank=True, default='')
+    cancel_requested = models.BooleanField(default=False)
+    pgid = models.IntegerField(null=True, blank=True)
 
     def __str__(self) -> str:
         return self.status
+
+
+class ConversionPreset(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    is_default = models.BooleanField(default=False)
+    output_scheme = models.CharField(max_length=255)
+    move_to_audiobookshelf = models.BooleanField(default=False)
+    audiobookshelf_library_path = models.CharField(
+        max_length=255, blank=True, default='')
+    delete_source_after_success = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Only one preset may be the default
+        if self.is_default:
+            ConversionPreset.objects.exclude(pk=self.pk).update(
+                is_default=False)
+
+    @classmethod
+    def get_default(cls):
+        return cls.objects.filter(is_default=True).first() or \
+            cls.objects.first()
+
+    def __str__(self) -> str:
+        return self.name
 
 
 class Book(models.Model):
@@ -61,6 +95,8 @@ class Book(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     status = models.OneToOneField(Status, on_delete=models.CASCADE)
     cover_image_link = models.URLField()
+    preset = models.ForeignKey(
+        ConversionPreset, null=True, blank=True, on_delete=models.SET_NULL)
     objects = BookManager()
 
     def __str__(self) -> str:
@@ -100,7 +136,6 @@ class Setting(models.Model):
     input_directory = models.CharField(max_length=255)
     num_cpus = models.IntegerField()
     output_directory = models.CharField(max_length=255)
-    output_scheme = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     objects = SettingManager()

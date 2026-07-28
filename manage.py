@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """Django's command-line utility for administrative tasks."""
 import os
-import shutil
 import subprocess
 import sys
 from django.core.management.utils import get_random_secret_key
@@ -23,9 +22,8 @@ if not os.path.exists(SECRET_PATH):
     f = open(SECRET_PATH, "w")
     f.write(get_random_secret_key())
     f.close()
-    python_bin = shutil.which('m4b-tool')
-    subprocess.run([python_bin, "manage.py", "makemigrations"])
-    subprocess.run([python_bin, "manage.py", "migrate"])
+    subprocess.run([sys.executable, "manage.py", "makemigrations"])
+    subprocess.run([sys.executable, "manage.py", "migrate"])
 
 
 def main():

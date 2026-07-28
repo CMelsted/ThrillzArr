@@ -5,9 +5,18 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Bragi Books{% endblock %}</title>
+    <script>
+        // Set theme before first paint to avoid a flash of the wrong theme
+        (function () {
+            const stored = localStorage.getItem("theme");
+            const preferred = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+            document.documentElement.dataset.theme = stored || preferred;
+        })();
+    </script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.3/css/bulma.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
     {% load static %}
+    <link rel="stylesheet" href="{% static 'css/theme.css' %}">
     <link rel="shortcut icon" href="{% static 'images/favicon.ico' %}">
     <style>
         body {
@@ -15,22 +24,22 @@
             display: flex;
             flex-direction: column;
           }
-      
+
           .main-section {
             flex-grow: 1;
             margin-top: 30px;
             margin-bottom: 30px;
           }
-      
+
           footer {
             margin-top: auto;
           }
-          
+
           {% block style %}{% endblock %}
     </style>
 </head>
-<body class="has-background-warning-dark">
-    <section class="hero is-small is-warning">
+<body>
+    <section class="hero is-small themed-hero">
         <nav class="level">
             <div class="hero-body">
                 <div class="level">
@@ -51,10 +60,15 @@
                 <ul>
                     <li {% if url_name == 'import' %}class="is-active" aria-current="page"{% endif %}><a {% if url_name == 'import' %}class="has-text-weight-light"{% endif %} href="{% url 'import' %}">Import</a></li>
                     <li {% if url_name == 'match' %}class="is-active" aria-current="page"{% endif %}><a {% if url_name == 'match' %}class="has-text-weight-light"{% endif %} href="{% url 'match' %}">Match</a></li>
+                    <li {% if url_name == 'review' %}class="is-active" aria-current="page"{% endif %}><a {% if url_name == 'review' %}class="has-text-weight-light"{% endif %} href="{% url 'review' %}">Review</a></li>
                     <li {% if url_name == 'books' %}class="is-active" aria-current="page"{% endif %}><a {% if url_name == 'books' %}class="has-text-weight-light"{% endif %} href="{% url 'books' %}">Books</a></li>
+                    <li {% if url_name == 'presets' %}class="is-active" aria-current="page"{% endif %}><a {% if url_name == 'presets' %}class="has-text-weight-light"{% endif %} href="{% url 'presets' %}">Presets</a></li>
                     <li {% if url_name == 'setting' %}class="is-active" aria-current="page"{% endif %}><a {% if url_name == 'setting' %}class="has-text-weight-light"{% endif %} href="{% url 'setting' %}">Settings</a></li>
                 </ul>
                 {% endwith %}
+                <button class="theme-toggle" id="theme-toggle" type="button" title="Toggle light/dark mode" aria-label="Toggle light/dark mode">
+                    <i class="fas fa-moon" id="theme-toggle-icon"></i>
+                </button>
             </nav>
         </nav>
     </section>
@@ -68,23 +82,42 @@
                     {% endfor %}
                 </ul>
             </div>
-            <div class="block"></div> 
+            <div class="block"></div>
             {% endif %}
         </div>
         <div class="container">
             {% block content %}{% endblock %}
         </div>
     </section>
-    <footer class="hero is-warning">
+    <footer class="hero themed-hero">
         <div class="hero-body has-text-centered">
             <p>
-                Bragibooks v{{ bragibooks_version }} - 
-                Django v{{ django_version }} - 
+                Bragibooks v{{ bragibooks_version }} -
+                Django v{{ django_version }} -
                 m4b-merge v{{ m4b_merge_version }}
             </p>
         </div>
     </footer>
     <script>
+        (function () {
+            const icon = document.getElementById("theme-toggle-icon");
+
+            function applyIcon() {
+                const dark = document.documentElement.dataset.theme === "dark";
+                icon.classList.toggle("fa-sun", dark);
+                icon.classList.toggle("fa-moon", !dark);
+            }
+
+            document.getElementById("theme-toggle").addEventListener("click", function () {
+                const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+                document.documentElement.dataset.theme = next;
+                localStorage.setItem("theme", next);
+                applyIcon();
+            });
+
+            applyIcon();
+        })();
+
         {% block script %}
         {% endblock %}
     </script>

@@ -1,11 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="box">
-    <div class="tabs is-fullwidth is-toggle" style="background: white;" data-default={{ default_view }}>
+    <div class="tabs is-fullwidth is-toggle themed-tabs" data-default={{ default_view }}>
         <ul>
             <li class="tab is-active" id="done-tab" onclick="openTab('done')"><a>Done</a></li>
             <li class="tab" id="processing-tab" onclick="openTab('processing')"><a>Processing</a></li>
             <li class="tab" id="error-tab" onclick="openTab('error')"><a>Error</a></li>
+            <li class="tab" id="abandoned-tab" onclick="openTab('abandoned')"><a>Abandoned</a></li>
         </ul>
     </div>
 
@@ -14,10 +15,45 @@
             {% include "book_list.html" with books=done_books %}
         </div>
         <div class="tab-pane" id="processing" style="display: none;">
-            {% include "book_list.html" with books=processing_books %}
+            {% include "book_list.html" with books=processing_books show_progress=True %}
         </div>
         <div class="tab-pane" id="error" style="display: none;">
-            {% include "book_list.html" with books=error_books %}
+            <form action="{% url 'clear-jobs' %}" method="POST">
+                {% csrf_token %}
+                {% if error_books %}
+                <div class="level">
+                    <div class="level-left"></div>
+                    <div class="level-right">
+                        <div class="level-item">
+                            <button class="button is-danger is-outlined" type="submit">
+                                <span class="icon"><i class="fas fa-trash"></i></span>
+                                <span>Clear selected</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                {% include "book_list.html" with books=error_books selectable=True %}
+            </form>
+        </div>
+        <div class="tab-pane" id="abandoned" style="display: none;">
+            <form action="{% url 'clear-jobs' %}" method="POST">
+                {% csrf_token %}
+                {% if abandoned_books %}
+                <div class="level">
+                    <div class="level-left"></div>
+                    <div class="level-right">
+                        <div class="level-item">
+                            <button class="button is-danger is-outlined" type="submit">
+                                <span class="icon"><i class="fas fa-trash"></i></span>
+                                <span>Clear selected</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                {% include "book_list.html" with books=abandoned_books selectable=True %}
+            </form>
         </div>
     </div>
 </div>

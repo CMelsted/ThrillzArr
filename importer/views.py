@@ -1,6 +1,7 @@
 # System imports
 import logging
 import os
+import signal
 from datetime import timedelta
 from pathlib import Path
 
@@ -8,20 +9,21 @@ import requests
 from django.conf import settings
 from django.contrib import messages
 from django.http import HttpRequest, HttpResponseBadRequest, JsonResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.views.generic import TemplateView, View
 # core merge logic:
 from m4b_merge import helpers
 
+from bragibooks_proj.celery import app as celery_app
 # Import Merge functions for django
-from utils.merge import create_book
+from utils.merge import create_book, set_book_people
 # Import Search tools
 from utils.search_tools import ScoreTool, SearchTool
 
 # Forms import
-from .forms import SettingForm
+from .forms import BookMetadataForm, PresetForm, SettingForm
 # Models import
-from .models import Book, Setting, StatusChoices
+from .models import Book, ConversionPreset, Setting, Status, StatusChoices
 from .tasks import m4b_merge_task
 
 # Get an instance of a logger
@@ -91,7 +93,7 @@ class MatchView(TemplateView):
     def post(self, request: HttpRequest):
         created_books = False
         for key, asin in request.POST.items():
-            
+
             if key == "csrfmiddlewaretoken":
                 continue
 
@@ -111,24 +113,208 @@ class MatchView(TemplateView):
             except ValueError:
                 messages.error(request, "Bad ASIN: " + asin)
                 return redirect("match")
-            
+
             original_path = Path(key)
             if not helpers.get_directory(original_path):
                 messages.error(request, f"No supported files in {original_path}")
                 continue
 
-            logger.info(f"Making models and merging files for: {original_path}")
+            logger.info(f"Making models for: {original_path}")
 
             book = create_book(asin, original_path)
             created_books = True
 
-            logger.info(f"Adding book {book} to processing queue")
-            m4b_merge_task.delay(asin)
-        
+            logger.info(f"Book {book} is now awaiting review")
+
         if created_books:
-            return redirect("books")
+            return redirect("review")
         else:
             return redirect("match")
+
+
+class ReviewView(TemplateView):
+    template_name = "review.html"
+
+    def get_context_data(self, **kwargs) -> dict:
+        pending_books = Book.objects.filter(
+            status__status=StatusChoices.PENDING_REVIEW).order_by(
+            '-created_at')
+
+        rows = []
+        for book in pending_books:
+            form = BookMetadataForm(
+                prefix=str(book.pk),
+                instance=book,
+                initial={
+                    'authors': ', '.join(
+                        str(author) for author in book.authors.all()),
+                    'narrators': ', '.join(
+                        str(narrator) for narrator in book.narrators.all()),
+                }
+            )
+            rows.append({'book': book, 'form': form})
+
+        return {
+            "rows": rows,
+            "presets": ConversionPreset.objects.all(),
+            "default_preset": ConversionPreset.get_default(),
+        }
+
+    def post(self, request: HttpRequest):
+        action = request.POST.get('action', '')
+
+        if action.startswith('discard:'):
+            book = get_object_or_404(Book, pk=action.split(':', 1)[1])
+            logger.info(f"Discarding pending book {book}")
+            # Deleting the Status cascades to the Book
+            book.status.delete()
+            messages.success(request, "Book discarded")
+            return redirect("review")
+
+        if action.startswith('approve:'):
+            books = [get_object_or_404(Book, pk=action.split(':', 1)[1])]
+        elif action == 'approve_all':
+            books = list(Book.objects.filter(
+                status__status=StatusChoices.PENDING_REVIEW))
+        else:
+            return HttpResponseBadRequest("Unknown action")
+
+        approved = 0
+        for book in books:
+            form = BookMetadataForm(
+                request.POST, prefix=str(book.pk), instance=book)
+            if not form.is_valid():
+                for field, errors in form.errors.items():
+                    for error in errors:
+                        messages.error(
+                            request, f"{book.title}: {field}: {error}")
+                continue
+
+            form.save()
+            set_book_people(
+                book,
+                form.cleaned_data.get('authors', ''),
+                form.cleaned_data.get('narrators', '')
+            )
+
+            if preset_id := request.POST.get(f"{book.pk}-preset"):
+                book.preset = ConversionPreset.objects.filter(
+                    pk=preset_id).first()
+                book.save()
+
+            book.status.status = StatusChoices.PROCESSING
+            book.status.save()
+
+            result = m4b_merge_task.delay(book.asin)
+            Status.objects.filter(pk=book.status.pk).update(
+                task_id=result.id)
+            logger.info(f"Approved and queued book {book}")
+            approved += 1
+
+        if approved:
+            return redirect("books")
+        return redirect("review")
+
+
+class EditBookView(TemplateView):
+    template_name = "edit_book.html"
+
+    def get(self, request, book_id):
+        book = get_object_or_404(Book, pk=book_id)
+        form = BookMetadataForm(
+            instance=book,
+            initial={
+                'authors': ', '.join(
+                    str(author) for author in book.authors.all()),
+                'narrators': ', '.join(
+                    str(narrator) for narrator in book.narrators.all()),
+            }
+        )
+        return render(request, self.template_name,
+                      {"book": book, "form": form})
+
+    def post(self, request, book_id):
+        book = get_object_or_404(Book, pk=book_id)
+        form = BookMetadataForm(request.POST, instance=book)
+        if form.is_valid():
+            form.save()
+            set_book_people(
+                book,
+                form.cleaned_data.get('authors', ''),
+                form.cleaned_data.get('narrators', '')
+            )
+            messages.success(request, f"Saved changes to {book.title}")
+            return redirect("books")
+
+        return render(request, self.template_name,
+                      {"book": book, "form": form})
+
+
+class BookStatusView(View):
+    def get(self, request, book_id):
+        book = get_object_or_404(Book, pk=book_id)
+        return JsonResponse({
+            'id': book.pk,
+            'status': book.status.status,
+            'progress_percent': book.status.progress_percent,
+            'stage': book.status.stage,
+            'message': book.status.message,
+        })
+
+
+class AbandonJobView(View):
+    def post(self, request, book_id):
+        book = get_object_or_404(Book, pk=book_id)
+        status = book.status
+
+        if status.status != StatusChoices.PROCESSING:
+            messages.error(request, "Job is not in progress")
+            return redirect("books")
+
+        logger.info(f"Abandoning job for {book}")
+        Status.objects.filter(pk=status.pk).update(
+            cancel_requested=True,
+            status=StatusChoices.ABANDONED,
+            message="Cancelled by user",
+            stage='',
+        )
+
+        # Kill the running m4b-tool process tree directly; the celery
+        # task also re-checks cancel_requested between stages
+        if status.pgid:
+            try:
+                os.killpg(status.pgid, signal.SIGTERM)
+                logger.info(f"Sent SIGTERM to process group {status.pgid}")
+            except (ProcessLookupError, PermissionError):
+                logger.warning(
+                    f"Could not signal process group {status.pgid}")
+
+        # Best-effort revoke in case the task is still queued
+        if status.task_id:
+            celery_app.control.revoke(status.task_id)
+
+        messages.success(request, f"Abandoned job for {book.title}")
+        return redirect("books")
+
+
+class ClearJobsView(View):
+    def post(self, request):
+        book_ids = request.POST.getlist('book_ids')
+        if not book_ids:
+            messages.error(request, "No jobs selected")
+            return redirect("books")
+
+        # Only Error/Abandoned jobs may be cleared; deleting the Status
+        # cascades to the Book
+        statuses = Status.objects.filter(
+            book__pk__in=book_ids,
+            status__in=[StatusChoices.ERROR, StatusChoices.ABANDONED]
+        )
+        count = statuses.count()
+        statuses.delete()
+
+        messages.success(request, f"Cleared {count} job(s)")
+        return redirect("books")
 
 
 class AsinSearch(View):
@@ -213,15 +399,19 @@ class BookListView(TemplateView):
             '-created_at')
         error_books = Book.objects.filter(status__status=StatusChoices.ERROR).order_by(
             '-created_at')
+        abandoned_books = Book.objects.filter(
+            status__status=StatusChoices.ABANDONED).order_by(
+            '-created_at')
 
         return render(request, self.template_name, self.get_context_data(
-            done_books=done_books, processing_books=processing_books, error_books=error_books))
+            done_books=done_books, processing_books=processing_books,
+            error_books=error_books, abandoned_books=abandoned_books))
 
     def get_context_data(self, **kwargs) -> dict:
         context = {"default_view": "done"}
 
         redirect_url = self.request.META.get('HTTP_REFERER', '')
-        if 'match' in redirect_url:
+        if 'match' in redirect_url or 'review' in redirect_url:
             context.update({"default_view": "processing"})
 
         for key, books in filter(lambda item: 'books' in item[0], kwargs.items()):
@@ -246,6 +436,44 @@ class BookListView(TemplateView):
         return length_arr
 
 
+class PresetsView(TemplateView):
+    template_name = "presets.html"
+
+    def get_context_data(self, **kwargs):
+        edit_id = self.request.GET.get('edit')
+        instance = ConversionPreset.objects.filter(pk=edit_id).first() \
+            if edit_id else None
+        return {
+            "presets": ConversionPreset.objects.all().order_by('name'),
+            "form": PresetForm(instance=instance),
+            "editing": instance,
+        }
+
+    def post(self, request):
+        action = request.POST.get('action', 'save')
+
+        if action.startswith('delete:'):
+            preset = get_object_or_404(
+                ConversionPreset, pk=action.split(':', 1)[1])
+            preset.delete()
+            messages.success(request, f"Deleted preset {preset.name}")
+            return redirect("presets")
+
+        preset_id = request.POST.get('preset_id')
+        instance = ConversionPreset.objects.filter(pk=preset_id).first() \
+            if preset_id else None
+        form = PresetForm(request.POST, instance=instance)
+        if form.is_valid():
+            preset = form.save()
+            messages.success(request, f"Saved preset {preset.name}")
+            return redirect("presets")
+
+        for field, errors in form.errors.items():
+            for error in errors:
+                messages.error(request, f"{field}: {error}")
+        return redirect("presets")
+
+
 class SettingView(TemplateView):
     template_name = "setting.html"
 
@@ -256,8 +484,7 @@ class SettingView(TemplateView):
             'completed_directory': '/input/done',
             'input_directory': '/input',
             'num_cpus': 0,
-            'output_directory': '/output',
-            'output_scheme': 'author/title/title - subtitle'
+            'output_directory': '/output'
         }
         if existing_settings:
             form = SettingForm(instance=existing_settings)
@@ -296,8 +523,7 @@ class SettingView(TemplateView):
                     completed_directory=form_data['completed_directory'],
                     input_directory=form_data['input_directory'],
                     num_cpus=form_data['num_cpus'],
-                    output_directory=form_data['output_directory'],
-                    output_scheme=form_data['output_scheme']
+                    output_directory=form_data['output_directory']
                 )
                 settings.save()
             else:
@@ -307,7 +533,6 @@ class SettingView(TemplateView):
                 es.input_directory = form_data['input_directory']
                 es.num_cpus = form_data['num_cpus']
                 es.output_directory = form_data['output_directory']
-                es.output_scheme = form_data['output_scheme']
                 es.save()
 
             return redirect("import")

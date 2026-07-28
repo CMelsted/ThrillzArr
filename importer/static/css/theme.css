@@ -1,0 +1,163 @@
+/* Light/dark theme layer over Bulma 0.9 (which has no native dark mode).
+   The active theme is set as data-theme="light|dark" on <html> before
+   first paint by an inline script in base.html. */
+
+:root,
+html[data-theme="light"] {
+    --bb-page-bg: #947600;
+    --bb-hero-bg: #ffe08a;
+    --bb-hero-text: rgba(0, 0, 0, 0.7);
+    --bb-box-bg: #ffffff;
+    --bb-box-text: #4a4a4a;
+    --bb-strong-text: #363636;
+    --bb-input-bg: #ffffff;
+    --bb-input-text: #363636;
+    --bb-input-border: #dbdbdb;
+    --bb-code-bg: #f5f5f5;
+    --bb-code-text: #da1039;
+    --bb-blockquote-bg: #f5f5f5;
+    --bb-table-head: #363636;
+}
+
+html[data-theme="dark"] {
+    --bb-page-bg: #14161a;
+    --bb-hero-bg: #23262e;
+    --bb-hero-text: #e6e6e6;
+    --bb-box-bg: #1e2129;
+    --bb-box-text: #c8ccd4;
+    --bb-strong-text: #eef0f4;
+    --bb-input-bg: #262a33;
+    --bb-input-text: #e6e6e6;
+    --bb-input-border: #3a3f4b;
+    --bb-code-bg: #262a33;
+    --bb-code-text: #ff7597;
+    --bb-blockquote-bg: #262a33;
+    --bb-table-head: #eef0f4;
+}
+
+body {
+    background-color: var(--bb-page-bg) !important;
+}
+
+/* Hero/nav/footer — replaces hardcoded Bulma is-warning colors */
+.hero.themed-hero,
+footer.themed-hero {
+    background-color: var(--bb-hero-bg) !important;
+    color: var(--bb-hero-text) !important;
+}
+
+.themed-hero .title,
+.themed-hero p {
+    color: var(--bb-hero-text) !important;
+}
+
+.themed-hero .breadcrumb a {
+    color: var(--bb-hero-text) !important;
+}
+
+.themed-hero .breadcrumb li+li::before {
+    color: var(--bb-hero-text);
+}
+
+/* Containers */
+.box,
+.card,
+.modal-card-body,
+.modal-card-head,
+.modal-card-foot {
+    background-color: var(--bb-box-bg) !important;
+    color: var(--bb-box-text) !important;
+}
+
+.title,
+.subtitle,
+.label,
+.card-header-title,
+.content h1,
+.content h2,
+.content h3,
+strong,
+.has-text-weight-bold,
+.has-text-weight-semibold,
+.table thead th,
+.checkbox {
+    color: var(--bb-strong-text) !important;
+}
+
+.content,
+.content p,
+.content li,
+.table,
+.table td {
+    color: var(--bb-box-text);
+}
+
+.table {
+    background-color: var(--bb-box-bg) !important;
+}
+
+/* Form controls */
+.input,
+.textarea,
+.select select {
+    background-color: var(--bb-input-bg) !important;
+    color: var(--bb-input-text) !important;
+    border-color: var(--bb-input-border) !important;
+}
+
+.input::placeholder,
+.textarea::placeholder {
+    color: var(--bb-input-text);
+    opacity: 0.5;
+}
+
+code {
+    background-color: var(--bb-code-bg) !important;
+    color: var(--bb-code-text) !important;
+}
+
+.content blockquote {
+    background-color: var(--bb-blockquote-bg) !important;
+    color: var(--bb-box-text) !important;
+}
+
+/* Tabs (book list) — previously hardcoded background: white */
+.themed-tabs {
+    background: var(--bb-box-bg);
+}
+
+.themed-tabs a {
+    color: var(--bb-box-text);
+}
+
+html[data-theme="dark"] .themed-tabs .tab:not(.is-active) a {
+    background-color: var(--bb-input-bg);
+    border-color: var(--bb-input-border);
+}
+
+/* File picker panel (importer page) */
+.panel,
+.panel-block,
+label.panel-block {
+    background-color: var(--bb-box-bg);
+    color: var(--bb-box-text) !important;
+}
+
+html[data-theme="dark"] .panel-block:hover,
+html[data-theme="dark"] label.panel-block:hover {
+    background-color: var(--bb-input-bg) !important;
+}
+
+/* Theme toggle button */
+.theme-toggle {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 1.3rem;
+    color: var(--bb-hero-text);
+    padding: 0.5rem 1rem;
+}
+
+.theme-toggle:hover {
+    opacity: 0.7;
+}
