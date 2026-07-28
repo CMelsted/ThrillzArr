@@ -1,11 +1,14 @@
 {% load directory_explorer_tags %}
 
 {% for item in contents %}
-    {% with id=item|generate_id %}
+    {% with id=item|generate_id item_str=item|as_str %}
         {% if item|is_directory %}
-            <label class="panel-block folder" id="{{ id }}" folder-id="{{folder_id}}" style="display: {{ display }};">
+            <label class="panel-block folder{% if item_str in session_paths %} is-imported-hidden{% endif %}" id="{{ id }}" folder-id="{{folder_id}}" data-src-path="{{ item_str }}" style="display: {{ display }};">
                 <div>
-                    <input type="checkbox" name="input_dir" value="{{ item }}">
+                    <button type="button" class="button is-success is-small mr-2" onclick="importEntry(this.closest('label').dataset.srcPath, this.closest('label'))">
+                        <span class="icon"><i class="fas fa-plus"></i></span>
+                        <span>Import</span>
+                    </button>
                     {% for i in depth|get_range %}
                         &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
                     {% endfor %}
@@ -19,12 +22,15 @@
                 </span>
             </label>
 
-            {% render_directory path=item folder_id=id depth=depth|add_one%}
-        
+            {% render_directory path=item folder_id=id depth=depth|add_one session_paths=session_paths %}
+
         {% else %}
 
-        <label class="panel-block file" style="display: {{ display }};" id="{{ id }}" folder-id="{{ folder_id }}">
-            <input type="checkbox" name="input_dir" value="{{ item }}">
+        <label class="panel-block file{% if item_str in session_paths %} is-imported-hidden{% endif %}" style="display: {{ display }};" id="{{ id }}" folder-id="{{ folder_id }}" data-src-path="{{ item_str }}">
+            <button type="button" class="button is-success is-small mr-2" onclick="importEntry(this.closest('label').dataset.srcPath, this.closest('label'))">
+                <span class="icon"><i class="fas fa-plus"></i></span>
+                <span>Import</span>
+            </button>
             {% for i in depth|get_range %}
                 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
             {% endfor %}

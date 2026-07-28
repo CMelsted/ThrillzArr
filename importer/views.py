@@ -34,67 +34,52 @@ logger = logging.getLogger(__name__)
 
 
 class ImportView(TemplateView):
+    """
+        A single page: a browsable tree of the input mount where each
+        item has an "Import" button, and a "match" area below it (ASIN
+        selection/search/accept) for whatever's currently been imported
+        but not yet approved. Moving an item between the two areas never
+        reloads the page, so in-progress matches on other items survive.
+    """
     template_name = "importer.html"
 
     def get_context_data(self, **kwargs):
-        return {"contents": importable_contents(input_dir())}
+        input_dirs = self.request.session.get('input_dir', [])
 
-    def post(self, request):
-        # Redirect if this is a new session
-        existing_settings = Setting.objects.first()
-        if not existing_settings:
-            logger.debug("No settings found, returning to settings page")
-            messages.error(
-                request, "Settings must be configured before import"
-            )
-            return redirect("setting")
-
-        if not (selected := request.POST.getlist('input_dir')):
-            messages.error(request, "You must select content to import")
-            return redirect("import")
-
-        request.session['input_dir'] = selected
-        return redirect("match")
-
-
-class MatchView(TemplateView):
-    template_name = "match.html"
-
-    def get(self, request):
-        # Redirect if this is a new session
-        if 'input_dir' not in request.session:
-            logger.debug("No session data found, returning to import page")
-            return redirect("import")
-
-        return render(request, self.template_name, self.get_context_data())
-
-    def get_context_data(self, **kwargs) -> dict:
-        # Check if any of these inputs exist in our DB
-        # If so, prepopulate their asins
-        context = []
-        for this_dir in self.request.session['input_dir']:
+        # Check if any of these already exist in our DB (e.g. re-imported
+        # after being removed), and if so, prepopulate their asin
+        match_context = []
+        for this_dir in input_dirs:
             try:
                 book = Book.objects.get(src_path=f"{this_dir}")
             except Book.DoesNotExist:
-                context.append({'src_path': this_dir})
+                match_context.append({'src_path': this_dir})
             else:
-                context.append({'src_path': this_dir, 'asin': book.asin})
+                match_context.append({'src_path': this_dir, 'asin': book.asin})
 
-        return {"context": context}
+        return {
+            "contents": importable_contents(input_dir()),
+            "session_paths": set(input_dirs),
+            "context": match_context,
+        }
 
     def post(self, request: HttpRequest):
-        # Accepting/removing one entry at a time is normally driven by
-        # fetch() so the remaining entries keep the matches already
-        # chosen for them; the form-post path is the no-JS fallback
+        # Every action here is normally driven by fetch() so importing or
+        # matching one entry never reloads the page and disturbs matches
+        # already chosen for other entries; the form-post path is the
+        # no-JS fallback (JsonResponse vs redirect+message)
         is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        action = request.POST.get('action', 'accept')
         src_path = request.POST.get('src_path', '')
         input_dirs = request.session.get('input_dir', [])
+
+        if action == 'add':
+            return self._add_entry(request, input_dirs, src_path, is_ajax)
 
         if src_path not in input_dirs:
             return self._respond(request, is_ajax, error="Unknown item")
 
-        # Removing an entry from the match list
-        if request.POST.get('action') == 'remove':
+        if action == 'remove':
             return self._drop_entry(request, input_dirs, src_path, is_ajax)
 
         # Accepting a single entry
@@ -128,17 +113,37 @@ class MatchView(TemplateView):
 
         return self._drop_entry(request, input_dirs, src_path, is_ajax)
 
+    def _add_entry(self, request, input_dirs, src_path, is_ajax):
+        if not (existing_settings := Setting.objects.first()):
+            return self._respond(
+                request, is_ajax,
+                error="Settings must be configured before import",
+                url=reverse('setting'))
+
+        original_path = Path(src_path)
+        if not helpers.get_directory(original_path):
+            return self._respond(
+                request, is_ajax,
+                error=f"No supported files in {original_path}")
+
+        if src_path not in input_dirs:
+            input_dirs.append(src_path)
+            request.session['input_dir'] = input_dirs
+
+        return self._respond(request, is_ajax)
+
     def _drop_entry(self, request, input_dirs, src_path, is_ajax):
         input_dirs.remove(src_path)
         request.session['input_dir'] = input_dirs
 
-        # Nothing left to match, so move the user on
+        # Only navigate away if there's a pending review queue to send
+        # the user to - otherwise stay put, nothing left to do here
         url = None
         if not input_dirs:
             del request.session['input_dir']
-            url = reverse('review') if Book.objects.filter(
-                status__status=StatusChoices.PENDING_REVIEW
-            ).exists() else reverse('import')
+            if Book.objects.filter(
+                    status__status=StatusChoices.PENDING_REVIEW).exists():
+                url = reverse('review')
 
         return self._respond(request, is_ajax, url=url)
 
@@ -149,8 +154,7 @@ class MatchView(TemplateView):
                 {'ok': error is None, 'error': error, 'url': url})
         if error:
             messages.error(request, error)
-            return redirect("match")
-        return redirect(url) if url else redirect("match")
+        return redirect(url) if url else redirect("import")
 
 
 class ReviewView(TemplateView):
@@ -434,7 +438,7 @@ class BookListView(TemplateView):
         context = {"default_view": "done"}
 
         redirect_url = self.request.META.get('HTTP_REFERER', '')
-        if 'match' in redirect_url or 'review' in redirect_url:
+        if 'review' in redirect_url:
             context.update({"default_view": "processing"})
 
         for key, books in filter(lambda item: 'books' in item[0], kwargs.items()):

@@ -56,7 +56,6 @@
                 {% with request.resolver_match.url_name as url_name %}
                 <ul>
                     <li {% if url_name == 'import' %}class="is-active" aria-current="page"{% endif %}><a {% if url_name == 'import' %}class="has-text-weight-light"{% endif %} href="{% url 'import' %}">Import</a></li>
-                    <li {% if url_name == 'match' %}class="is-active" aria-current="page"{% endif %}><a {% if url_name == 'match' %}class="has-text-weight-light"{% endif %} href="{% url 'match' %}">Match</a></li>
                     <li {% if url_name == 'review' %}class="is-active" aria-current="page"{% endif %}><a {% if url_name == 'review' %}class="has-text-weight-light"{% endif %} href="{% url 'review' %}">Review</a></li>
                     <li {% if url_name == 'books' %}class="is-active" aria-current="page"{% endif %}><a {% if url_name == 'books' %}class="has-text-weight-light"{% endif %} href="{% url 'books' %}">Books</a></li>
                     <li {% if url_name == 'presets' %}class="is-active" aria-current="page"{% endif %}><a {% if url_name == 'presets' %}class="has-text-weight-light"{% endif %} href="{% url 'presets' %}">Presets</a></li>
