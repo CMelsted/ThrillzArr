@@ -1,9 +1,6 @@
 import os
 from pathlib import Path
 
-from importer.models import Setting
-
-
 def input_dir() -> str:
     # Input location comes from the deploy-time bind mount, not settings
     if Path('/input').is_dir():
@@ -20,18 +17,11 @@ def output_dir() -> str:
 
 def excluded_input_paths() -> set:
     """
-        Locations that must never be offered for import: the folder
-        completed originals are moved into, and the output location if it
-        happens to live inside the input tree.
+        Locations that must never be offered for import: the output
+        location, if it happens to live inside the input tree.
     """
-    candidates = [Path(output_dir())]
-
-    setting = Setting.objects.first()
-    if setting and setting.completed_directory:
-        candidates.append(Path(setting.completed_directory))
-
     excluded = set()
-    for path in candidates:
+    for path in [Path(output_dir())]:
         try:
             excluded.add(path.resolve())
         except OSError:

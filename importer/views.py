@@ -48,11 +48,11 @@ class ImportView(TemplateView):
             )
             return redirect("setting")
 
-        if not (input_dir := request.POST.getlist('input_dir')):
+        if not (selected := request.POST.getlist('input_dir')):
             messages.error(request, "You must select content to import")
             return redirect("import")
 
-        request.session['input_dir'] = input_dir
+        request.session['input_dir'] = selected
         return redirect("match")
 
 
@@ -321,11 +321,8 @@ class ClearJobsView(View):
             messages.error(request, "No books selected")
             return redirect("books")
 
-        count = statuses.count()
         # Deleting the Status cascades to the Book
         statuses.delete()
-
-        messages.success(request, f"Cleared {count} book(s)")
         return redirect("books")
 
 
@@ -494,7 +491,6 @@ class SettingView(TemplateView):
         default_data = {
             'api_url': 'https://api.audnex.us',
             'num_cpus': 0,
-            'completed_directory': f"{input_dir()}/done",
         }
         if existing_settings:
             form = SettingForm(instance=existing_settings)
@@ -512,21 +508,7 @@ class SettingView(TemplateView):
 
         form = SettingForm(request.POST, instance=existing_settings)
         if form.is_valid():
-            form_data = form.cleaned_data
-
-            # Check file path validity (only when moving is enabled)
-            if form_data['completed_directory']:
-                errors = Setting.objects.file_path_validator(
-                    form_data['completed_directory'])
-                if len(errors) > 0:
-                    for k, v in errors.items():
-                        messages.error(request, v)
-                    return redirect("setting")
-
-            setting = form.save(commit=False)
-            setting.completed_directory = form_data['completed_directory']
-            setting.save()
-
+            form.save()
             return redirect("import")
 
         for field, errors in form.errors.items():

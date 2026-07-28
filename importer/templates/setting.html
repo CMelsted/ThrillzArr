@@ -37,10 +37,10 @@
                 {% csrf_token %}
                 <div class="card-content">
                     {% for field in form %}
-                        <div class="field is-horizontal" {% if field.name == "completed_directory" %}id="completed-directory-field"{% endif %}>
+                        <div class="field is-horizontal">
                             <div class="field-body">
                                 <div class="field">
-                                    {% if field.name == "delete_source_after_success" or field.name == "move_completed_enabled" %}
+                                    {% if field.name == "delete_source_after_success" %}
                                     <label class="checkbox">
                                         {{ field }}
                                         {{ field.label }}
@@ -51,6 +51,9 @@
                                         {{ field }}
                                     </div>
                                     {% endif %}
+                                    {% for error in field.errors %}
+                                    <p class="help is-danger">{{ error }}</p>
+                                    {% endfor %}
                                 </div>
                             </div>
                         </div>
@@ -70,7 +73,6 @@
 {% endblock %}
 {% block script %}
 (function () {
-    // Theme toggle
     const icon = document.getElementById("theme-toggle-icon");
     const label = document.getElementById("theme-toggle-label");
 
@@ -89,31 +91,5 @@
     });
 
     applyIcon();
-
-    // Show the completed-directory path only when moving is enabled;
-    // moving and deleting the originals are mutually exclusive
-    const moveCheckbox = document.getElementById("move-completed-enabled");
-    const deleteCheckbox = document.getElementById("delete-source-enabled");
-    const pathField = document.getElementById("completed-directory-field");
-
-    function applyPathVisibility() {
-        pathField.style.display = moveCheckbox.checked ? "" : "none";
-    }
-
-    moveCheckbox.addEventListener("change", function () {
-        if (moveCheckbox.checked) {
-            deleteCheckbox.checked = false;
-        }
-        applyPathVisibility();
-    });
-
-    deleteCheckbox.addEventListener("change", function () {
-        if (deleteCheckbox.checked) {
-            moveCheckbox.checked = false;
-            applyPathVisibility();
-        }
-    });
-
-    applyPathVisibility();
 })();
 {% endblock %}

@@ -38,8 +38,7 @@
                                 <form action="{% url 'clear-jobs' %}" method="POST">
                                     {% csrf_token %}
                                     <input type="hidden" name="book_id" value="{{ book.pk }}">
-                                    <button class="button is-danger is-outlined is-small" type="submit"
-                                        onclick="return confirm('Remove this book from the list? Files on disk are not deleted.')">
+                                    <button class="button is-danger is-outlined is-small" type="submit">
                                         <span class="icon"><i class="fas fa-trash"></i></span>
                                         <span>Clear Entry</span>
                                     </button>

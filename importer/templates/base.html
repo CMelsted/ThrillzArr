@@ -72,13 +72,11 @@
     <section class="main-section">
         <div class="container">
             {% if messages %}
-            <div class="notification is-danger">
-                <ul>
-                    {% for message in messages %}
-                    <li>{{message}}</li>
-                    {% endfor %}
-                </ul>
+            {% for message in messages %}
+            <div class="notification {% if message.level_tag == 'error' %}is-danger{% elif message.level_tag == 'success' %}is-success{% elif message.level_tag == 'warning' %}is-warning{% else %}is-info{% endif %}">
+                {{ message }}
             </div>
+            {% endfor %}
             <div class="block"></div>
             {% endif %}
         </div>

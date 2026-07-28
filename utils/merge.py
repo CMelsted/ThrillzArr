@@ -19,10 +19,11 @@ logger = logging.getLogger(__name__)
 
 def set_configs(book=None):
     config.output = output_dir()
+    # Originals are never relocated; they're left in place or deleted
+    config.junk_dir = ''
     existing_settings = Setting.objects.first()
     if existing_settings:
         config.api_url = existing_settings.api_url
-        config.junk_dir = existing_settings.completed_directory
         config.num_cpus = (
             existing_settings.num_cpus if existing_settings.num_cpus > 0
             else os.cpu_count()
@@ -107,30 +108,24 @@ def _apply_book_overrides(metadata, book):
 
 def _post_process(book, m4b):
     """
-        After a successful merge: optionally relocate the output into an
-        Audiobookshelf library, then either delete the source input or
-        move it to the completed/junk dir. Returns the final output path.
+        After a successful merge: clear the sidecar files m4b-tool leaves
+        behind and optionally delete the source input. Returns the output
+        path.
     """
     output_file = Path(f"{m4b.book_output}.m4b")
+
+    # Chapters are embedded in the m4b by now, so the sidecar text file
+    # and the downloaded cover are just clutter
     chapters_file = Path(f"{m4b.book_output}.chapters.txt")
-    dest = output_file
-
-    preset = book.preset or ConversionPreset.get_default()
-
-    if (preset and preset.move_to_audiobookshelf
-            and preset.audiobookshelf_library_path):
-        rel_path = os.path.relpath(m4b.book_output, config.output)
-        target_base = Path(preset.audiobookshelf_library_path) / rel_path
-        target_base.parent.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Moving output to Audiobookshelf library: {target_base}")
-        shutil.move(str(output_file), f"{target_base}.m4b")
-        if chapters_file.exists():
-            shutil.move(str(chapters_file), f"{target_base}.chapters.txt")
-        dest = Path(f"{target_base}.m4b")
+    if chapters_file.exists():
+        try:
+            chapters_file.unlink()
+        except OSError:
+            logger.warning(f"Couldn't remove chapters file: {chapters_file}")
+    m4b.cleanup_cover()
 
     existing_settings = Setting.objects.first()
     if existing_settings and existing_settings.delete_source_after_success:
-        m4b.cleanup_cover()
         src = Path(book.src_path)
         logger.info(f"Deleting source input: {src}")
         try:
@@ -140,10 +135,8 @@ def _post_process(book, m4b):
                 src.unlink()
         except OSError:
             logger.warning(f"Couldn't delete source input: {src}")
-    else:
-        m4b.move_completed_input()
 
-    return dest
+    return output_file
 
 
 def run_m4b_merge(asin: str):

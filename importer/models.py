@@ -1,5 +1,4 @@
 from django.db import models
-from pathlib import Path
 
 
 class BookManager(models.Manager):
@@ -12,20 +11,6 @@ class BookManager(models.Manager):
         if len(asin) == 0:
             errors['blank_asin'] = "Must fill in all ASIN fields"
 
-        return errors
-
-
-class SettingManager(models.Manager):
-    def file_path_validator(self, path):
-        errors = {}
-
-        if not Path(path).is_dir():
-            try:
-                Path(path).mkdir(parents=True, exist_ok=True)
-            except OSError:
-                errors['invalid_path'] = (
-                    f"Invalid path: {path}"
-                )
         return errors
 
 
@@ -54,9 +39,6 @@ class ConversionPreset(models.Model):
     name = models.CharField(max_length=100, unique=True)
     is_default = models.BooleanField(default=False)
     output_scheme = models.CharField(max_length=255)
-    move_to_audiobookshelf = models.BooleanField(default=False)
-    audiobookshelf_library_path = models.CharField(
-        max_length=255, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -131,9 +113,7 @@ class Narrator(models.Model):
 
 class Setting(models.Model):
     api_url = models.CharField(max_length=255)
-    completed_directory = models.CharField(max_length=255, blank=True, default='')
     num_cpus = models.IntegerField()
     delete_source_after_success = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    objects = SettingManager()
