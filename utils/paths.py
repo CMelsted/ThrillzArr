@@ -1,6 +1,9 @@
 import os
 from pathlib import Path
 
+from django.conf import settings
+
+
 def input_dir() -> str:
     # Input location comes from the deploy-time bind mount, not settings.
     # The mount is guaranteed to exist under Docker; the ~/input fallback
@@ -19,6 +22,26 @@ def output_dir() -> str:
     path = Path.home() / 'output'
     path.mkdir(parents=True, exist_ok=True)
     return str(path)
+
+
+def uploads_dir() -> str:
+    # Files uploaded through the browser instead of dropped into the
+    # input mount. Stored under CONFIG_DIR so they survive container
+    # restarts (same persistent volume as secret_key.txt/db.sqlite3).
+    path = Path(settings.CONFIG_DIR) / 'uploads'
+    path.mkdir(parents=True, exist_ok=True)
+    return str(path)
+
+
+def tracked_paths() -> set:
+    """
+        Every src_path with a live Book record, regardless of status
+        (pending review, processing, done, error, abandoned). A path
+        only ever leaves this set once its Book is actually deleted
+        (Discard, Clear Entry, Clear all).
+    """
+    from importer.models import Book
+    return set(Book.objects.values_list('src_path', flat=True))
 
 
 def excluded_input_paths() -> set:

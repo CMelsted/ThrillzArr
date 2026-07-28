@@ -6,6 +6,7 @@ import re
 import requests
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 from pathvalidate import sanitize_filename
 from pydub.utils import mediainfo
@@ -22,6 +23,10 @@ class M4bMerge:
         self.original_path = original_path
         self.chapters = chapters
         self.cover_path = None
+        # Scratch space for the downloaded cover / single-file merge
+        # backup - never inside the source's own directory, so nothing
+        # shows up as a stray "importable" file while a job is running
+        self.work_dir = None
         # Process group id of the currently/last running child process.
         # Callers may set on_subprocess_start to a callable receiving the
         # pgid as soon as a child is spawned (used for job cancellation).
@@ -41,17 +46,20 @@ class M4bMerge:
         finally:
             self.last_pgid = None
 
+    def ensure_work_dir(self):
+        if self.work_dir is None:
+            self.work_dir = Path(tempfile.mkdtemp(prefix='thrillzarr-work-'))
+        return self.work_dir
+
     def download_cover(self):
         if 'image' in self.metadata:
             # Request to image URL
             cover_request = requests.get(self.metadata['image'])
             # Verify image exists
             if cover_request.status_code == 200:
-                # Path to write image to
-                if self.input_path.is_dir():
-                    self.cover_path = self.input_path / "cover.jpg"
-                else:
-                    self.cover_path = f"{self.input_path}_cover.jpg"
+                # Scratch file - never written next to the source, so it
+                # never shows up as an importable item while a job runs
+                self.cover_path = self.ensure_work_dir() / "cover.jpg"
                 # Write image
                 with open(self.cover_path, 'wb') as f:
                     f.write(cover_request.content)
@@ -284,6 +292,7 @@ class M4bMerge:
         self.merge()
         self.fix_chapters()
         self.move_completed_input()
+        self.cleanup_work_dir()
 
     def merge(self):
         # Dispatch to the right merge routine for the input type.
@@ -347,32 +356,29 @@ class M4bMerge:
     def merge_single_aac(self):
         logging.info(f"Processing single {self.input_extension} input...")
 
+        # Working copy - built in scratch space, not beside the source,
+        # so it never shows up as an importable item while this runs
+        working_copy = self.ensure_work_dir() / f"{self.input_path.stem}.new.m4b"
+
         args = [
             config.m4b_tool_bin,
             'meta',
             f"--tmp-dir=/tmp/m4b-tool.{os.getpid()}",
             '--ignore-source-tags',
-            (f"{self.input_path.parent}/"
-                f"{self.input_path.stem}.new.m4b")
+            str(working_copy)
         ]
         # Add in main metadata args
         args.extend(self.metadata_args)
 
         # make backup file
-        shutil.copy(
-            self.input_path,
-            f"{self.input_path.parent}/{self.input_path.stem}.new.m4b"
-        )
+        shutil.copy(self.input_path, working_copy)
 
         # m4b command with passed args
         logging.debug(f"M4B command: {args}")
         self._run_subprocess(args)
 
         # Move completed file
-        shutil.move(
-            f"{self.input_path.parent}/{self.input_path.stem}.new.m4b",
-            f"{self.book_output}.m4b"
-        )
+        shutil.move(working_copy, f"{self.book_output}.m4b")
 
     def merge_single_mp3(self):
         logging.info(f"Processing single {self.input_extension} input...")
@@ -500,18 +506,14 @@ class M4bMerge:
         # Apply fixed chapters to file
         self._run_subprocess(args)
 
-    def cleanup_cover(self):
-        if self.cover_path:
-            try:
-                os.remove(self.cover_path)
-            except OSError:
-                logging.warning("Couldn't remove downloaded cover file")
-            self.cover_path = None
+    def cleanup_work_dir(self):
+        if self.work_dir:
+            shutil.rmtree(self.work_dir, ignore_errors=True)
+            self.work_dir = None
+        self.cover_path = None
 
     def move_completed_input(self):
         if not config.junk_dir: return
-        # Cleanup cover file
-        self.cleanup_cover()
         # Move completed input to junk dir
         logging.debug(
             f'Moving completed input {self.original_path} to {config.junk_dir}')

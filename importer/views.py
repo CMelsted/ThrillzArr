@@ -13,15 +13,19 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.generic import TemplateView, View
 # core merge logic:
+from django.utils.text import get_valid_filename
 from m4b_merge import helpers
 
 from bragibooks_proj.celery import app as celery_app
 # Import Merge functions for django
 from utils.merge import create_book, set_book_people
 # Import path helpers (locations come from the deploy-time bind mounts)
-from utils.paths import importable_contents, input_dir
+from utils.paths import (importable_contents, input_dir, tracked_paths,
+                         uploads_dir)
 # Import Search tools
 from utils.search_tools import ScoreTool, SearchTool
+
+UPLOAD_EXTENSIONS = {'mp3', 'm4a', 'm4b'}
 
 # Forms import
 from .forms import BookMetadataForm, PresetForm, SettingForm
@@ -63,11 +67,11 @@ class ImportView(TemplateView):
         # import again. A Book's tracking record only ever goes away via
         # Discard/Clear Entry/Clear all, so once one of those happens the
         # path naturally becomes importable again on the next page load.
-        hidden_paths = set(input_dirs) | set(
-            Book.objects.values_list('src_path', flat=True))
+        hidden_paths = set(input_dirs) | tracked_paths()
 
         return {
             "contents": importable_contents(input_dir()),
+            "uploads": importable_contents(uploads_dir()),
             "hidden_paths": hidden_paths,
             "context": match_context,
         }
@@ -81,6 +85,12 @@ class ImportView(TemplateView):
         action = request.POST.get('action', 'accept')
         src_path = request.POST.get('src_path', '')
         input_dirs = request.session.get('input_dir', [])
+
+        if action == 'upload':
+            return self._handle_upload(request, is_ajax)
+
+        if action == 'delete_upload':
+            return self._delete_upload(request, src_path, is_ajax)
 
         if action == 'add':
             return self._add_entry(request, input_dirs, src_path, is_ajax)
@@ -122,6 +132,59 @@ class ImportView(TemplateView):
 
         return self._drop_entry(request, input_dirs, src_path, is_ajax)
 
+    def _handle_upload(self, request, is_ajax):
+        uploaded = request.FILES.get('file')
+        if not uploaded:
+            return self._respond(request, is_ajax, error="No file provided")
+
+        extension = Path(uploaded.name).suffix.lstrip('.').lower()
+        if extension not in UPLOAD_EXTENSIONS:
+            return self._respond(
+                request, is_ajax,
+                error=f"Unsupported file type: .{extension or '?'}")
+
+        dest_dir = Path(uploads_dir())
+        safe_name = get_valid_filename(uploaded.name) or f"upload.{extension}"
+        dest = dest_dir / safe_name
+        stem, suffix = dest.stem, dest.suffix
+        counter = 2
+        while dest.exists():
+            dest = dest_dir / f"{stem}_{counter}{suffix}"
+            counter += 1
+
+        with open(dest, 'wb') as f:
+            for chunk in uploaded.chunks():
+                f.write(chunk)
+
+        logger.info(f"Uploaded file saved to {dest}")
+        return self._respond(
+            request, is_ajax, src_path=str(dest), label=dest.name)
+
+    def _delete_upload(self, request, src_path, is_ajax):
+        if not src_path:
+            return self._respond(request, is_ajax, error="Invalid upload")
+
+        try:
+            resolved = Path(src_path).resolve()
+            resolved.relative_to(Path(uploads_dir()).resolve())
+        except (OSError, ValueError):
+            return self._respond(request, is_ajax, error="Invalid upload")
+
+        in_flight = set(
+            request.session.get('input_dir', [])) | tracked_paths()
+        if src_path in in_flight:
+            return self._respond(
+                request, is_ajax,
+                error="This file is currently being imported")
+
+        try:
+            resolved.unlink()
+        except OSError:
+            return self._respond(request, is_ajax, error="Couldn't delete file")
+
+        logger.info(f"Deleted uploaded file {resolved}")
+        return self._respond(request, is_ajax)
+
     def _add_entry(self, request, input_dirs, src_path, is_ajax):
         if not (existing_settings := Setting.objects.first()):
             return self._respond(
@@ -154,10 +217,11 @@ class ImportView(TemplateView):
         return self._respond(request, is_ajax)
 
     @staticmethod
-    def _respond(request, is_ajax, error=None, url=None):
+    def _respond(request, is_ajax, error=None, url=None, **extra):
         if is_ajax:
-            return JsonResponse(
-                {'ok': error is None, 'error': error, 'url': url})
+            payload = {'ok': error is None, 'error': error, 'url': url}
+            payload.update(extra)
+            return JsonResponse(payload)
         if error:
             messages.error(request, error)
         return redirect(url) if url else redirect("import")
@@ -544,15 +608,28 @@ class SettingView(TemplateView):
         else:
             form = SettingForm(initial=default_data)
 
+        in_flight = set(
+            self.request.session.get('input_dir', [])) | tracked_paths()
+
         context = {
             "form": form,
             "settings": existing_settings,
+            "uploads": importable_contents(uploads_dir()),
+            "uploads_in_flight": in_flight,
         }
         return context
 
     def post(self, request):
-        existing_settings = Setting.objects.first()
+        action = request.POST.get('action', '')
 
+        if action == 'delete_upload':
+            return self._delete_upload(
+                request, request.POST.get('src_path', ''))
+
+        if action == 'delete_all_uploads':
+            return self._delete_all_uploads(request)
+
+        existing_settings = Setting.objects.first()
         form = SettingForm(request.POST, instance=existing_settings)
         if form.is_valid():
             form.save()
@@ -561,4 +638,44 @@ class SettingView(TemplateView):
         for field, errors in form.errors.items():
             for error in errors:
                 messages.error(request, f"{field}: {error}")
+        return redirect("setting")
+
+    @staticmethod
+    def _delete_upload(request, src_path):
+        if not src_path:
+            messages.error(request, "Invalid upload")
+            return redirect("setting")
+
+        try:
+            resolved = Path(src_path).resolve()
+            resolved.relative_to(Path(uploads_dir()).resolve())
+        except (OSError, ValueError):
+            messages.error(request, "Invalid upload")
+            return redirect("setting")
+
+        in_flight = set(request.session.get('input_dir', [])) | tracked_paths()
+        if src_path in in_flight:
+            messages.error(request, "That file is currently being imported")
+            return redirect("setting")
+
+        try:
+            resolved.unlink()
+            messages.success(request, f"Deleted {resolved.name}")
+        except OSError:
+            messages.error(request, "Couldn't delete file")
+        return redirect("setting")
+
+    @staticmethod
+    def _delete_all_uploads(request):
+        in_flight = set(request.session.get('input_dir', [])) | tracked_paths()
+        deleted = 0
+        for item in importable_contents(uploads_dir()):
+            if str(item) in in_flight:
+                continue
+            try:
+                item.unlink()
+                deleted += 1
+            except OSError:
+                continue
+        messages.success(request, f"Deleted {deleted} upload(s)")
         return redirect("setting")

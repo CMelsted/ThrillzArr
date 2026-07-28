@@ -164,6 +164,114 @@ function buildMatchEntry(counter, srcPath, label) {
     return wrapper;
 }
 
+// --- Uploads ---
+
+async function uploadFile(file) {
+    const dropzone = document.getElementById("upload-dropzone");
+    const csrfToken = document.querySelector('input[name="csrfmiddlewaretoken"]').value;
+
+    const formData = new FormData();
+    formData.append("csrfmiddlewaretoken", csrfToken);
+    formData.append("action", "upload");
+    formData.append("file", file);
+
+    dropzone.classList.add("is-loading");
+    let result;
+    try {
+        const response = await fetch(IMPORT_URL, {
+            method: "POST",
+            headers: { "X-Requested-With": "XMLHttpRequest" },
+            body: formData,
+        });
+        result = await response.json();
+    } catch (error) {
+        result = { ok: false, error: `Could not reach the server: ${error}` };
+    }
+    dropzone.classList.remove("is-loading");
+
+    if (!result.ok) {
+        showMatchError(result.error);
+        return;
+    }
+    showMatchError("");
+    addUploadEntry(result.src_path, result.label);
+}
+
+function addUploadEntry(srcPath, label) {
+    const row = document.createElement("label");
+    row.className = "panel-block upload-entry";
+    row.dataset.srcPath = srcPath;
+
+    const left = document.createElement("div");
+    left.className = "is-flex is-align-items-center";
+
+    const importButton = document.createElement("button");
+    importButton.type = "button";
+    importButton.className = "button is-success is-small mr-2";
+    importButton.innerHTML = '<span class="icon"><i class="fas fa-plus"></i></span><span>Import</span>';
+    importButton.addEventListener("click", () => importEntry(srcPath, row));
+    left.appendChild(importButton);
+
+    const icon = document.createElement("span");
+    icon.className = "panel-icon";
+    icon.innerHTML = '<i class="fas fa-file-audio"></i>';
+    left.appendChild(icon);
+
+    left.appendChild(document.createTextNode(label));
+    row.appendChild(left);
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "button is-danger is-small";
+    deleteButton.title = "Delete this upload";
+    deleteButton.innerHTML = '<span class="icon"><i class="fas fa-trash"></i></span>';
+    deleteButton.addEventListener("click", () => deleteUpload(srcPath, row));
+    row.appendChild(deleteButton);
+
+    document.getElementById("uploads-list").appendChild(row);
+}
+
+async function deleteUpload(srcPath, rowEl) {
+    const result = await postAction({ action: "delete_upload", src_path: srcPath });
+    if (!result.ok) {
+        showMatchError(result.error);
+        return;
+    }
+    showMatchError("");
+    rowEl.remove();
+}
+
+(function () {
+    const dropzone = document.getElementById("upload-dropzone");
+    const input = document.getElementById("upload-input");
+
+    dropzone.addEventListener("click", () => input.click());
+
+    input.addEventListener("change", () => {
+        Array.from(input.files).forEach(uploadFile);
+        input.value = "";
+    });
+
+    ["dragover", "dragenter"].forEach(eventName => {
+        dropzone.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            dropzone.classList.add("is-dragover");
+        });
+    });
+
+    ["dragleave", "dragend"].forEach(eventName => {
+        dropzone.addEventListener(eventName, () => {
+            dropzone.classList.remove("is-dragover");
+        });
+    });
+
+    dropzone.addEventListener("drop", (event) => {
+        event.preventDefault();
+        dropzone.classList.remove("is-dragover");
+        Array.from(event.dataTransfer.files).forEach(uploadFile);
+    });
+})();
+
 // --- Custom search / remove-confirmation modals ---
 
 function openSearchPanel(srcPath, select_id) {

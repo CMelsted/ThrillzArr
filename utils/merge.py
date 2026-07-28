@@ -115,14 +115,14 @@ def _post_process(book, m4b):
     output_file = Path(f"{m4b.book_output}.m4b")
 
     # Chapters are embedded in the m4b by now, so the sidecar text file
-    # and the downloaded cover are just clutter
+    # is just clutter (the cover/work dir is cleaned up by the caller's
+    # finally block, covering this and every other exit path uniformly)
     chapters_file = Path(f"{m4b.book_output}.chapters.txt")
     if chapters_file.exists():
         try:
             chapters_file.unlink()
         except OSError:
             logger.warning(f"Couldn't remove chapters file: {chapters_file}")
-    m4b.cleanup_cover()
 
     existing_settings = Setting.objects.first()
     if existing_settings and existing_settings.delete_source_after_success:
@@ -234,6 +234,11 @@ def run_m4b_merge(asin: str):
             pgid=None
         )
         return
+    finally:
+        # Every exit path (success, error, cancelled mid-run) must clear
+        # the scratch working directory - it's never covered by the
+        # source-deletion setting since it was never inside the source
+        m4b.cleanup_work_dir()
 
     Book.objects.filter(pk=book.pk).update(dest_path=str(dest))
     _update_status(
