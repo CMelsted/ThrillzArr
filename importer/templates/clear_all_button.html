@@ -5,8 +5,7 @@
             <form action="{% url 'clear-jobs' %}" method="POST">
                 {% csrf_token %}
                 <input type="hidden" name="clear_all" value="{{ status }}">
-                <button class="button is-danger" type="submit"
-                    onclick="return confirm('Remove ALL books from the {{ status }} list? Files on disk are not deleted.')">
+                <button class="button is-danger" type="submit">
                     <span class="icon"><i class="fas fa-trash"></i></span>
                     <span>Clear all</span>
                 </button>
