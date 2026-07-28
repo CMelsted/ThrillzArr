@@ -36,9 +36,10 @@ RUN echo "---- INSTALL RUNTIME PACKAGES ----" && \
     && echo "date.timezone = UTC" >> /etc/php83/php.ini \
     && ln -sf /usr/bin/php83 /bin/php
 
-# Add gosu for easy step-down from root (used by entrypoint.sh)
-RUN apk add --no-cache --update --upgrade --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing \
-    gosu
+# Add su-exec for easy step-down from root; symlinked as gosu since
+# entrypoint.sh uses gosu syntax (argument-compatible)
+RUN apk add --no-cache --update --upgrade su-exec \
+    && ln -sf /sbin/su-exec /usr/local/bin/gosu
 
 # Add ffmpeg, mp4v2 and fdkaac binaries
 COPY --from=ffmpeg /usr/local/bin/ffmpeg /usr/local/bin/
