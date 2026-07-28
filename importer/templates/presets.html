@@ -14,6 +14,7 @@
                 <table class="table is-fullwidth">
                     <thead>
                         <tr>
+                            <th>Default</th>
                             <th>Name</th>
                             <th>Output scheme</th>
                             <th></th>
@@ -23,9 +24,16 @@
                         {% for preset in presets %}
                         <tr>
                             <td>
-                                {{ preset.name }}
-                                {% if preset.is_default %}<span class="tag is-link is-light">default</span>{% endif %}
+                                <form action="{% url 'presets' %}" method="POST">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="set_default">
+                                    <input type="hidden" name="preset_id" value="{{ preset.pk }}">
+                                    <input type="checkbox" title="Use as default preset"
+                                        {% if preset.is_default %}checked{% endif %}
+                                        onchange="setDefault(this)">
+                                </form>
                             </td>
+                            <td>{{ preset.name }}</td>
                             <td><code>{{ preset.output_scheme }}</code></td>
                             <td>
                                 <div class="buttons are-small is-right">
@@ -101,4 +109,15 @@
         </div>
     </div>
 </div>
+{% endblock %}
+{% block script %}
+function setDefault(checkbox) {
+    // Exactly one preset is always the default, so the only meaningful
+    // action is moving it to another row - never clearing it
+    if (!checkbox.checked) {
+        checkbox.checked = true;
+        return;
+    }
+    checkbox.form.submit();
+}
 {% endblock %}

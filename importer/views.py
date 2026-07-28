@@ -464,16 +464,34 @@ class PresetsView(TemplateView):
         if action.startswith('delete:'):
             preset = get_object_or_404(
                 ConversionPreset, pk=action.split(':', 1)[1])
+            was_default = preset.is_default
             preset.delete()
+            # Promote another preset so a default always exists
+            if was_default and (
+                    replacement := ConversionPreset.objects.first()):
+                replacement.is_default = True
+                replacement.save()
             messages.success(request, f"Deleted preset {preset.name}")
             return redirect("presets")
 
         preset_id = request.POST.get('preset_id')
+
+        if action == 'set_default':
+            preset = get_object_or_404(ConversionPreset, pk=preset_id)
+            preset.is_default = True
+            # save() clears the flag on every other preset
+            preset.save()
+            return redirect("presets")
+
         instance = ConversionPreset.objects.filter(pk=preset_id).first() \
             if preset_id else None
         form = PresetForm(request.POST, instance=instance)
         if form.is_valid():
             preset = form.save()
+            # There must always be a default to fall back on
+            if not ConversionPreset.objects.filter(is_default=True).exists():
+                preset.is_default = True
+                preset.save()
             messages.success(request, f"Saved preset {preset.name}")
             return redirect("presets")
 

@@ -26,12 +26,10 @@ class PresetForm(forms.ModelForm):
         model = ConversionPreset
         fields = (
             'name',
-            'is_default',
             'output_scheme'
         )
         labels = {
             'name': 'Preset name',
-            'is_default': 'Use as default preset',
             'output_scheme': 'Output path format'
         }
         widgets = {
