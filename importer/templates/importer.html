@@ -106,7 +106,7 @@ display: none !important;
                     <div class="column is-grouped" id="asin-search-{{ forloop.counter|add:'-1' }}">
                         <div class="is-flex is-align-items-center" style="gap: 15px;">
                             <button type="button" class="button is-danger is-rounded remove-entry" title="Remove this item"
-                                onclick="openRemoveConfirmationModal('{{ input.src_path|escapejs }}', '{{ forloop.counter|add:'-1' }}')">
+                                onclick="removeColumn('{{ forloop.counter|add:'-1' }}')">
                                 <span class="icon"><i class="fas fa-times"></i></span>
                             </button>
                             <div class="image-label-container">
@@ -180,23 +180,6 @@ display: none !important;
                 <button class="button" onclick="closeSearchPanel()">Cancel</button>
             </div>
         </footer>
-    </div>
-</div>
-
-<div class="modal" id="remove-confirmation-modal">
-    <div class="modal-background"></div>
-    <div class="modal-card">
-        <header class="modal-card-head">
-            <p class="modal-card-title is-flex-shrink-1"></p>
-            <h2 class="title is-4" id="confirm-modal-title">Are you sure you want to remove this item?</h2>
-            <button class="delete" aria-label="close" onclick="closeRemoveConfirmationModal()"></button>
-        </header>
-        <section class="modal-card-body">
-            <div class="buttons is-flex is-justify-content-center">
-                <button class="button is-danger" id="remove-column-button">Yes</button>
-                <button class="button" onclick="closeRemoveConfirmationModal()">No</button>
-            </div>
-        </section>
     </div>
 </div>
 {% endblock %}

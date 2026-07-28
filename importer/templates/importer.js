@@ -99,7 +99,7 @@ function buildMatchEntry(counter, srcPath, label) {
     removeButton.className = "button is-danger is-rounded remove-entry";
     removeButton.title = "Remove this item";
     removeButton.innerHTML = '<span class="icon"><i class="fas fa-times"></i></span>';
-    removeButton.addEventListener("click", () => openRemoveConfirmationModal(srcPath, String(counter)));
+    removeButton.addEventListener("click", () => removeColumn(String(counter)));
     headerRow.appendChild(removeButton);
 
     const imageLabelContainer = document.createElement("div");
@@ -189,24 +189,6 @@ function closeSearchPanel() {
     modal.classList.remove("is-active");
 }
 
-function openRemoveConfirmationModal(label, counter) {
-    const modalLabel = document.querySelector("#confirm-modal-title");
-    modalLabel.textContent = `Remove ${label} from search`;
-
-    const modalButton = document.querySelector("#remove-column-button");
-    modalButton.onclick = () => removeColumn(counter)
-
-    // Get the modal element and set it to active
-    const modal = document.getElementById('remove-confirmation-modal');
-    modal.classList.add('is-active');
-}
-
-function closeRemoveConfirmationModal() {
-    // Get the modal element and remove the active class
-    const modal = document.getElementById('remove-confirmation-modal');
-    modal.classList.remove('is-active');
-}
-
 // --- Accept / remove, driven through the same endpoint as Import ---
 
 async function postEntry(counter, action) {
@@ -270,7 +252,6 @@ async function acceptAll() {
 }
 
 async function removeColumn(counter) {
-    closeRemoveConfirmationModal();
     const select = document.getElementById(`asin-select-${counter}`);
     const srcPath = select ? select.dataset.srcPath : null;
 
