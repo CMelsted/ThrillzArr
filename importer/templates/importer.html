@@ -36,26 +36,6 @@ word-break: break-all;
 display: none !important;
 }
 
-.panel-block.upload-entry {
-display: flex;
-justify-content: space-between;
-}
-
-.upload-dropzone {
-border: 2px dashed var(--bb-input-border, #dbdbdb);
-border-radius: 6px;
-padding: 20px;
-width: 100%;
-text-align: center;
-cursor: pointer;
-color: var(--bb-box-text, inherit);
-}
-
-.upload-dropzone.is-dragover {
-border-color: hsl(171, 100%, 41%);
-background: rgba(0, 209, 178, 0.08);
-}
-
 .modal-card {
     position: fixed;
     top: 10%;
@@ -92,43 +72,6 @@ background: rgba(0, 209, 178, 0.08);
 {% block content %}
 {% csrf_token %}
 <div class="notification is-danger" id="match-error" style="display: none;"></div>
-
-<div class="columns">
-    <div class="column">
-        <nav class="panel">
-            <p class="panel-heading">
-                Uploaded Files
-            </p>
-            <div class="panel-block">
-                <div id="upload-dropzone" class="upload-dropzone">
-                    <span class="icon"><i class="fas fa-upload"></i></span>
-                    <span>Drag a file here, or click to browse (.mp3, .m4a, .m4b)</span>
-                </div>
-                <input type="file" id="upload-input" accept=".mp3,.m4a,.m4b" style="display:none;">
-            </div>
-            <div id="uploads-list">
-                {% for item in uploads %}
-                {% with item_str=item|as_str %}
-                <label class="panel-block upload-entry{% if item_str in hidden_paths %} is-imported-hidden{% endif %}" data-src-path="{{ item_str }}">
-                    <div class="is-flex is-align-items-center">
-                        <button type="button" class="button is-success is-small mr-2" onclick="importEntry(this.closest('label').dataset.srcPath, this.closest('label'))">
-                            <span class="icon"><i class="fas fa-plus"></i></span>
-                            <span>Import</span>
-                        </button>
-                        <span class="panel-icon"><i class="fas fa-file-audio" aria-hidden="false"></i></span>
-                        {{ item|basename }}
-                    </div>
-                    <button type="button" class="button is-danger is-small" title="Delete this upload"
-                        onclick="deleteUpload(this.closest('label').dataset.srcPath, this.closest('label'))">
-                        <span class="icon"><i class="fas fa-trash"></i></span>
-                    </button>
-                </label>
-                {% endwith %}
-                {% endfor %}
-            </div>
-        </nav>
-    </div>
-</div>
 
 <div class="columns">
     <div class="column">

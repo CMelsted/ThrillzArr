@@ -1,5 +1,4 @@
 {% extends "base.html" %}
-{% load directory_explorer_tags %}
 {% block content %}
 <div class="columns">
     <div class="column">
@@ -68,56 +67,6 @@
                     </div>
                 </footer>
             </form>
-        </div>
-        <div class="block"></div>
-        <div class="card">
-            <div class="card-header is-center">
-                <div class="card-header-title">
-                    <p class="title">Uploaded Files</p>
-                </div>
-            </div>
-            <div class="card-content">
-                {% if uploads %}
-                <div class="level">
-                    <div class="level-left"></div>
-                    <div class="level-right">
-                        <div class="level-item">
-                            <form action="{% url 'setting' %}" method="POST">
-                                {% csrf_token %}
-                                <button class="button is-danger" type="submit" name="action" value="delete_all_uploads">
-                                    <span class="icon"><i class="fas fa-trash"></i></span>
-                                    <span>Delete all</span>
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-                <table class="table is-fullwidth">
-                    <tbody>
-                        {% for item in uploads %}
-                        {% with item_str=item|as_str %}
-                        <tr>
-                            <td>{{ item|basename }}</td>
-                            <td class="has-text-right">
-                                <form action="{% url 'setting' %}" method="POST">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="action" value="delete_upload">
-                                    <input type="hidden" name="src_path" value="{{ item_str }}">
-                                    <button class="button is-danger is-small" type="submit"
-                                        {% if item_str in uploads_in_flight %}disabled title="Currently being imported"{% endif %}>
-                                        <span class="icon"><i class="fas fa-trash"></i></span>
-                                    </button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% endwith %}
-                        {% endfor %}
-                    </tbody>
-                </table>
-                {% else %}
-                <p>No files uploaded.</p>
-                {% endif %}
-            </div>
         </div>
     </div>
 </div>

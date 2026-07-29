@@ -1,8 +1,6 @@
 import os
 from pathlib import Path
 
-from django.conf import settings
-
 
 def input_dir() -> str:
     # Input location comes from the deploy-time bind mount, not settings.
@@ -20,15 +18,6 @@ def output_dir() -> str:
     if Path('/output').is_dir():
         return '/output'
     path = Path.home() / 'output'
-    path.mkdir(parents=True, exist_ok=True)
-    return str(path)
-
-
-def uploads_dir() -> str:
-    # Files uploaded through the browser instead of dropped into the
-    # input mount. Stored under CONFIG_DIR so they survive container
-    # restarts (same persistent volume as secret_key.txt/db.sqlite3).
-    path = Path(settings.CONFIG_DIR) / 'uploads'
     path.mkdir(parents=True, exist_ok=True)
     return str(path)
 
