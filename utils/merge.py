@@ -253,15 +253,15 @@ def run_m4b_merge(asin: str):
 
 
 def create_book(asin, original_path) -> Book:
-    # Make models only if book doesn't exist
-    if not Book.objects.filter(asin=asin).exists():
-        book = make_book_model(asin, original_path)
+    # Only reuse an existing row for the exact same (asin, src_path) pair -
+    # i.e. re-importing after a book was removed/discarded. A different
+    # source file that happens to match the same asin must always get its
+    # own row, or it silently hijacks and overwrites the other book.
+    existing = Book.objects.filter(
+        asin=asin, src_path=str(original_path)).first()
 
-    else:
-        book = Book.objects.get(asin=asin)
-        book.src_path = original_path
-        book.save()
-
+    if existing:
+        book = existing
         book.status.status = StatusChoices.PENDING_REVIEW
         book.status.message = ""
         book.status.progress_percent = 0
@@ -271,6 +271,9 @@ def create_book(asin, original_path) -> Book:
         book.status.pgid = None
         book.status.save()
         logger.warning("Book already exists in database, only merging files")
+
+    else:
+        book = make_book_model(asin, original_path)
 
     return book
 

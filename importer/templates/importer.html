@@ -151,6 +151,12 @@ display: none !important;
         <section class="modal-card-body">
             <form>
                 <div class="field">
+                    <label class="label">ASIN / Identifier</label>
+                    <div class="control">
+                        <input class="input" type="text" id="asin-identifier" placeholder="ASIN, ISBN, or other identifier">
+                    </div>
+                </div>
+                <div class="field">
                     <label class="label">Title</label>
                     <div class="control">
                         <input class="input" type="text" id="title" placeholder="Title">
@@ -176,7 +182,7 @@ display: none !important;
             </div>
             <div style="padding-left: 10px;">
                 <button class="button is-link"
-                    onclick="searchAsin(document.getElementById('title').value, document.getElementById('author').value, document.getElementById('keywords').value)">Search</button>
+                    onclick="searchAsin(document.getElementById('title').value, document.getElementById('author').value, document.getElementById('keywords').value, document.getElementById('asin-identifier').value)">Search</button>
                 <button class="button" onclick="closeSearchPanel()">Cancel</button>
             </div>
         </footer>

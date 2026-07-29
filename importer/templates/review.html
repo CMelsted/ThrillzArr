@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load directory_explorer_tags %}
 {% block title %}ThrillzArr - Review{% endblock %}
 {% block content %}
 {% if rows %}
@@ -50,6 +51,8 @@
                 </div>
             </div>
             <div class="column">
+                <p><span class="has-text-weight-semibold">Original file:</span> {{ row.book.src_path|basename }}</p>
+                <div class="block"></div>
                 {% for field in row.form %}
                 <div class="field">
                     <label class="label">{{ field.label }}</label>

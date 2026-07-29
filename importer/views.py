@@ -13,7 +13,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.generic import TemplateView, View
 # core merge logic:
-from m4b_merge import helpers
+from m4b_merge import audible_helper, helpers
 
 from bragibooks_proj.celery import app as celery_app
 # Import Merge functions for django
@@ -353,7 +353,7 @@ class ClearJobsView(View):
 
 class AsinSearch(View):
     def get(self, request):
-        accepted_keywords = ["media_dir", "title", "author", "keywords"]
+        accepted_keywords = ["media_dir", "title", "author", "keywords", "asin"]
 
         if any(key not in accepted_keywords for key in request.GET.keys()):
             return HttpResponseBadRequest(
@@ -365,13 +365,23 @@ class AsinSearch(View):
             request.GET.get("media_dir"),
             request.GET.get("title"),
             request.GET.get("author"),
-            request.GET.get("keywords")
+            request.GET.get("keywords"),
+            request.GET.get("asin")
         )
 
-    def search(self, media_dir: str = "", title: str = "", author: str = "", keywords: str = "") -> JsonResponse:
+    def search(self, media_dir: str = "", title: str = "", author: str = "", keywords: str = "", asin: str = "") -> JsonResponse:
         """
             Search for an album.
         """
+        asin = (asin or "").strip()
+        if len(asin) == 10:
+            result = self.lookup_by_asin(asin)
+            return JsonResponse([result] if result else [], safe=False)
+
+        if asin:
+            # Not an ASIN (e.g. an ISBN) - fold it into the free-text search
+            keywords = f"{keywords} {asin}".strip() if keywords else asin
+
         # Instantiate search helper
         search_helper = SearchTool(
             filename=media_dir, title=title, author=author, keywords=keywords)
@@ -410,6 +420,36 @@ class AsinSearch(View):
                 logger.debug("-" * 35)
 
         return sorted(scored_results, key=lambda inf: inf['score'], reverse=True)
+
+    @staticmethod
+    def lookup_by_asin(asin: str) -> dict | None:
+        """
+            Direct exact-match lookup for a known ASIN, bypassing the
+            keyword catalog search/scoring entirely.
+        """
+        existing_settings = Setting.objects.first()
+        if not existing_settings:
+            return None
+
+        try:
+            metadata = audible_helper.BookData(asin).fetch_api_data(
+                existing_settings.api_url)
+            title = metadata.get('title')
+        except (requests.RequestException, ValueError, AttributeError):
+            return None
+
+        if not title:
+            return None
+
+        return {
+            'asin': asin,
+            'title': metadata.get('title', ''),
+            'author': ', '.join(
+                a['name'] for a in metadata.get('authors', [])),
+            'narrator': ', '.join(
+                n['name'] for n in metadata.get('narrators', [])),
+            'image_link': metadata.get('image', ''),
+        }
 
     @staticmethod
     def call_search_api(helper: SearchTool):

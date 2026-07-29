@@ -178,6 +178,7 @@ function closeSearchPanel() {
     const modal = document.getElementById('custom-search-modal');
 
     // Clear the input fields
+    modal.querySelector('#asin-identifier').value = '';
     modal.querySelector('#title').value = '';
     modal.querySelector('#author').value = '';
     modal.querySelector('#keywords').value = '';
@@ -268,7 +269,7 @@ async function removeColumn(counter) {
 
 // --- ASIN auto-search ---
 
-function constructQueryParams(media_dir, title, author, keywords) {
+function constructQueryParams(media_dir, title, author, keywords, asin) {
     let params = [];
     if (media_dir) {
         params.push(`media_dir=${encodeURIComponent(media_dir)}`);
@@ -281,6 +282,9 @@ function constructQueryParams(media_dir, title, author, keywords) {
     }
     if (keywords) {
         params.push(`keywords=${encodeURIComponent(keywords)}`);
+    }
+    if (asin) {
+        params.push(`asin=${encodeURIComponent(asin)}`);
     }
     return `?${params.join('&')}`;
 }
@@ -361,12 +365,12 @@ function checkAllSelectsHaveValue() {
     });
 }
 
-async function searchAsin(title, author, keywords) {
+async function searchAsin(title, author, keywords, asin) {
     const modal = document.getElementById('custom-search-modal');
     const select = document.getElementById(modal.dataset.value);
 
     // Build the query params and url
-    let queryParams = constructQueryParams("", title, author, keywords);
+    let queryParams = constructQueryParams("", title, author, keywords, asin);
     console.debug(queryParams);
     url = "asin-search" + queryParams;
 
