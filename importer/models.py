@@ -1,5 +1,7 @@
+from datetime import timedelta
+
 from django.db import models
-from pathlib import Path
+from django.utils import timezone
 
 
 class BookManager(models.Manager):
@@ -15,32 +17,63 @@ class BookManager(models.Manager):
         return errors
 
 
-class SettingManager(models.Manager):
-    def file_path_validator(self, path):
-        errors = {}
-
-        if not Path(path).is_dir():
-            try:
-                Path(path).mkdir(parents=True, exist_ok=True)
-            except OSError:
-                errors['invalid_path'] = (
-                    f"Invalid path: {path}"
-                )
-        return errors
-
-
 class StatusChoices(models.TextChoices):
+    PENDING_REVIEW = "Pending Review"
     PROCESSING = "Processing"
     DONE = "Done"
     ERROR = "Error"
+    ABANDONED = "Abandoned"
 
 
 class Status(models.Model):
-    status = models.CharField(max_length=10, choices=StatusChoices.choices)
+    STUCK_THRESHOLD = timedelta(seconds=60)
+
+    status = models.CharField(max_length=20, choices=StatusChoices.choices)
     message = models.TextField()
+    progress_percent = models.IntegerField(default=0)
+    stage = models.CharField(max_length=100, blank=True, default='')
+    task_id = models.CharField(max_length=255, blank=True, default='')
+    cancel_requested = models.BooleanField(default=False)
+    pgid = models.IntegerField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self) -> str:
         return self.status
+
+    @property
+    def stuck(self) -> bool:
+        # A task that's actually running sets a non-empty stage within
+        # moments (see run_m4b_merge's first _set_progress call); Processing
+        # + empty stage past the threshold means no worker ever picked up
+        # the task (e.g. worker down, or the sqla+sqlite broker dropped it)
+        return (
+            self.status == StatusChoices.PROCESSING
+            and not self.stage
+            and timezone.now() - self.updated_at > self.STUCK_THRESHOLD
+        )
+
+
+class ConversionPreset(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    is_default = models.BooleanField(default=False)
+    output_scheme = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Only one preset may be the default
+        if self.is_default:
+            ConversionPreset.objects.exclude(pk=self.pk).update(
+                is_default=False)
+
+    @classmethod
+    def get_default(cls):
+        return cls.objects.filter(is_default=True).first() or \
+            cls.objects.first()
+
+    def __str__(self) -> str:
+        return self.name
 
 
 class Book(models.Model):
@@ -61,6 +94,8 @@ class Book(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     status = models.OneToOneField(Status, on_delete=models.CASCADE)
     cover_image_link = models.URLField()
+    preset = models.ForeignKey(
+        ConversionPreset, null=True, blank=True, on_delete=models.SET_NULL)
     objects = BookManager()
 
     def __str__(self) -> str:
@@ -96,11 +131,7 @@ class Narrator(models.Model):
 
 class Setting(models.Model):
     api_url = models.CharField(max_length=255)
-    completed_directory = models.CharField(max_length=255)
-    input_directory = models.CharField(max_length=255)
     num_cpus = models.IntegerField()
-    output_directory = models.CharField(max_length=255)
-    output_scheme = models.CharField(max_length=255)
+    delete_source_after_success = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    objects = SettingManager()

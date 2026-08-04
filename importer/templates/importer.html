@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block style %}
 .panel {
-background: white;
+background: var(--bb-box-bg);
 }
 
 .panel-block {
@@ -32,51 +32,160 @@ flex-direction: column;
 word-break: break-all;
 }
 
-.control.has-icons-right .icon {
-pointer-events: auto;
+.is-imported-hidden {
+display: none !important;
 }
 
-.clear-search {
-cursor: default;
+.modal-card {
+    position: fixed;
+    top: 10%;
 }
 
-.has-icons-right {
-position: relative;
+.modal-card-foot {
+    display: flex;
+    justify-content: space-between;
+}
+
+.notification {
+    flex-grow: 1;
+    text-align: left;
+}
+
+.image-label-container {
+    display: flex;
+    align-items: end;
+    gap: 10px;
+    margin-bottom: 10px;
+    margin-left: 20px;
+}
+
+.image-label-container label {
+    line-break: anywhere;
+}
+
+.image-label-container img {
+    width: 150px;
+    border-radius: 10px;
 }
 {% endblock %}
 {% load directory_explorer_tags %}
 {% block content %}
+{% csrf_token %}
+<div class="notification is-danger" id="match-error" style="display: none;"></div>
+
 <div class="columns">
     <div class="column">
         <nav class="panel">
             <p class="panel-heading">
-                Choose Files or Directories to process
+                Choose books below for processing
             </p>
-            <div class="panel-block">
-                <p class="control has-icons-left has-icons-right">
-                    <input class="input" id="search-input" type="text" placeholder="Search">
-                    <span class="icon is-left">
-                        <i class="fas fa-search" aria-hidden="false"></i>
-                    </span>
-                    <span class="icon is-right clear-search">
-                        <i class="fas fa-times" aria-hidden="false"></i>
-                    </span>
-                </p>
+            <div class="panel-block-container">
+                {% include "directory_contents.html" with hidden_paths=hidden_paths %}
             </div>
-            <label class="panel-block">
-                <input type="checkbox" id="select-all-checkbox">
-                Select All
-            </label>
-            <form action="{% url 'import' %}" method="POST">
-                {% csrf_token %}
-                <div class="panel-block-container">
-                    {% include "directory_contents.html" %}
+        </nav>
+    </div>
+</div>
+
+<div class="columns" id="match-section" style="display: {% if not context %}none{% endif %};">
+    <div class="column">
+        <div class="card">
+            <div class="card-header">
+                <div class="card-header-title">
+                    <p class="title">Match books</p>
                 </div>
-                <div class="panel-block">
-                    <button class="button is-link is-fullwidth">Next</button>
+                <div class="card-header-icon">
+                    <button class="button is-success" type="button" id="accept-all" onclick="acceptAll()">
+                        <span class="icon"><i class="fas fa-check-double"></i></span>
+                        <span>Accept All</span>
+                    </button>
+                </div>
+            </div>
+            <div class="card-content">
+                <div class="container" id="match-entries-container">
+                    {% for input in context %}
+                    <div class="column is-grouped" id="asin-search-{{ forloop.counter|add:'-1' }}">
+                        <div class="is-flex is-align-items-center" style="gap: 15px;">
+                            <button type="button" class="button is-danger is-rounded remove-entry" title="Remove this item"
+                                onclick="removeColumn('{{ forloop.counter|add:'-1' }}')">
+                                <span class="icon"><i class="fas fa-times"></i></span>
+                            </button>
+                            <div class="image-label-container">
+                                {% load static %}
+                                <img src="{% static 'images/cover_not_available.jpg' %}" id="image-{{ forloop.counter|add:'-1' }}" alt="">
+                                <label class="label">{{ input.src_path|basename }}</label>
+                            </div>
+                        </div>
+                        <div class="field is-flex is-flex-direction-column">
+                            <div class="control is-inline-flex is-align-items-center">
+                                <div class="select is-loading mr-3 is-fullwidth">
+                                    <select class="asin-select" id="asin-select-{{ forloop.counter|add:'-1' }}" name="asin"
+                                        data-src-path="{{ input.src_path }}"
+                                        onchange="updateImage('{{ forloop.counter|add:'-1' }}'); checkSelectHasValue('{{ forloop.counter|add:'-1' }}')">
+                                        <option>{{ input.src_path }}</option>
+                                    </select>
+                                </div>
+                                <button class="button is-link" type="button" onclick="openSearchPanel('{{ input.src_path|escapejs }}', 'asin-select-{{ forloop.counter|add:"-1" }}')">Custom Search</button>
+                                <button class="button is-success ml-2" type="button" id="accept-{{ forloop.counter|add:'-1' }}"
+                                    onclick="acceptEntry('{{ forloop.counter|add:'-1' }}')" disabled>
+                                    <span class="icon"><i class="fas fa-check"></i></span>
+                                    <span>Accept</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modals -->
+<div class="modal" id="custom-search-modal">
+    <div class="modal-background"></div>
+    <div class="modal-card">
+        <header class="modal-card-head">
+            <p class="modal-card-title is-flex-shrink-1"></p>
+            <button class="delete" aria-label="close" onclick="closeSearchPanel()"></button>
+        </header>
+        <section class="modal-card-body">
+            <form>
+                <div class="field">
+                    <label class="label">ASIN / Identifier</label>
+                    <div class="control">
+                        <input class="input" type="text" id="asin-identifier" placeholder="ASIN, ISBN, or other identifier">
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="label">Title</label>
+                    <div class="control">
+                        <input class="input" type="text" id="title" placeholder="Title">
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="label">Author</label>
+                    <div class="control">
+                        <input class="input" type="text" id="author" placeholder="Author">
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="label">Keywords</label>
+                    <div class="control">
+                        <input class="input" type="text" id="keywords" placeholder="Keywords">
+                    </div>
                 </div>
             </form>
-        </nav>
+        </section>
+        <footer class="modal-card-foot">
+            <div class="notification is-warning" id="search-notification" style="margin: 10px; display: none;">
+                No results found for this search...
+            </div>
+            <div style="padding-left: 10px;">
+                <button class="button is-link"
+                    onclick="searchAsin(document.getElementById('title').value, document.getElementById('author').value, document.getElementById('keywords').value, document.getElementById('asin-identifier').value)">Search</button>
+                <button class="button" onclick="closeSearchPanel()">Cancel</button>
+            </div>
+        </footer>
     </div>
 </div>
 {% endblock %}

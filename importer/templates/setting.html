@@ -5,6 +5,31 @@
         <div class="card">
             <div class="card-header is-center">
                 <div class="card-header-title">
+                    <p class="title">Appearance</p>
+                </div>
+            </div>
+            <div class="card-content">
+                <div class="level">
+                    <div class="level-left">
+                        <div class="level-item">
+                            <p>Light / dark mode</p>
+                        </div>
+                    </div>
+                    <div class="level-right">
+                        <div class="level-item">
+                            <button class="button theme-toggle" id="theme-toggle" type="button" title="Toggle light/dark mode" aria-label="Toggle light/dark mode">
+                                <span class="icon"><i class="fas fa-moon" id="theme-toggle-icon"></i></span>
+                                <span id="theme-toggle-label">Dark mode</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="block"></div>
+        <div class="card">
+            <div class="card-header is-center">
+                <div class="card-header-title">
                     <p class="title">Settings</p>
                 </div>
             </div>
@@ -15,23 +40,20 @@
                         <div class="field is-horizontal">
                             <div class="field-body">
                                 <div class="field">
+                                    {% if field.name == "delete_source_after_success" %}
+                                    <label class="checkbox">
+                                        {{ field }}
+                                        {{ field.label }}
+                                    </label>
+                                    {% else %}
                                     {{ field.label_tag }}
-                                    {% if field.name == "output_scheme" %}
-                                    <div class="content">
-                                        <blockquote>
-                                            <p>
-                                                Use "/" for subdirectories.
-                                                <br>
-                                                Supported output scheme keywords are:
-                                                <br>
-                                                asin, author, narrator, series_name, series_position, subtitle, title, year
-                                            </p>
-                                        </blockquote>
-                                    </div>
-                                    {% endif %}
                                     <div class="control">
                                         {{ field }}
                                     </div>
+                                    {% endif %}
+                                    {% for error in field.errors %}
+                                    <p class="help is-danger">{{ error }}</p>
+                                    {% endfor %}
                                 </div>
                             </div>
                         </div>
@@ -48,4 +70,26 @@
         </div>
     </div>
 </div>
+{% endblock %}
+{% block script %}
+(function () {
+    const icon = document.getElementById("theme-toggle-icon");
+    const label = document.getElementById("theme-toggle-label");
+
+    function applyIcon() {
+        const dark = document.documentElement.dataset.theme === "dark";
+        icon.classList.toggle("fa-sun", dark);
+        icon.classList.toggle("fa-moon", !dark);
+        label.textContent = dark ? "Switch to light mode" : "Switch to dark mode";
+    }
+
+    document.getElementById("theme-toggle").addEventListener("click", function () {
+        const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+        document.documentElement.dataset.theme = next;
+        localStorage.setItem("theme", next);
+        applyIcon();
+    });
+
+    applyIcon();
+})();
 {% endblock %}

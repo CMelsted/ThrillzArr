@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}ThrillzArr - Presets{% endblock %}
+{% block content %}
+<div class="columns">
+    <div class="column is-half">
+        <div class="card">
+            <div class="card-header is-center">
+                <div class="card-header-title">
+                    <p class="title">Conversion presets</p>
+                </div>
+            </div>
+            <div class="card-content">
+                {% if presets %}
+                <table class="table is-fullwidth">
+                    <thead>
+                        <tr>
+                            <th>Default</th>
+                            <th>Name</th>
+                            <th>Output scheme</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for preset in presets %}
+                        <tr>
+                            <td>
+                                <form action="{% url 'presets' %}" method="POST">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="set_default">
+                                    <input type="hidden" name="preset_id" value="{{ preset.pk }}">
+                                    <input type="checkbox" title="Use as default preset"
+                                        {% if preset.is_default %}checked{% endif %}
+                                        onchange="setDefault(this)">
+                                </form>
+                            </td>
+                            <td>{{ preset.name }}</td>
+                            <td><code>{{ preset.output_scheme }}</code></td>
+                            <td>
+                                <div class="buttons are-small is-right">
+                                    <a class="button" href="{% url 'presets' %}?edit={{ preset.pk }}">
+                                        <span class="icon"><i class="fas fa-pen"></i></span>
+                                    </a>
+                                    {% if presets|length > 1 %}
+                                    <form action="{% url 'presets' %}" method="POST">
+                                        {% csrf_token %}
+                                        <button class="button is-danger is-outlined" type="submit" name="action" value="delete:{{ preset.pk }}">
+                                            <span class="icon"><i class="fas fa-trash"></i></span>
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p>No presets yet — create one on the right.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="column is-half">
+        <div class="card">
+            <div class="card-header is-center">
+                <div class="card-header-title">
+                    <p class="title">{% if editing %}Edit "{{ editing.name }}"{% else %}New preset{% endif %}</p>
+                </div>
+            </div>
+            <form action="{% url 'presets' %}" method="POST">
+                {% csrf_token %}
+                {% if editing %}<input type="hidden" name="preset_id" value="{{ editing.pk }}">{% endif %}
+                <div class="card-content">
+                    {% for field in form %}
+                    <div class="field">
+                        {{ field.label_tag }}
+                        {% if field.name == "output_scheme" %}
+                        <div class="content">
+                            <blockquote>
+                                <p>
+                                    Use "/" for subdirectories.
+                                    <br>
+                                    Supported output scheme keywords are:
+                                    <br>
+                                    asin, author, narrator, series_name, series_position, subtitle, title, year
+                                </p>
+                            </blockquote>
+                        </div>
+                        {% endif %}
+                        <div class="control">
+                            {{ field }}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <footer class="card-footer">
+                    <div class="card-footer-item">
+                        <div class="control">
+                            <button class="button is-link is-fullwidth" type="submit" name="action" value="save">Save preset</button>
+                        </div>
+                    </div>
+                    {% if editing %}
+                    <div class="card-footer-item">
+                        <div class="control">
+                            <a class="button is-fullwidth" href="{% url 'presets' %}">Cancel</a>
+                        </div>
+                    </div>
+                    {% endif %}
+                </footer>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block script %}
+function setDefault(checkbox) {
+    // Exactly one preset is always the default, so the only meaningful
+    // action is moving it to another row - never clearing it
+    if (!checkbox.checked) {
+        checkbox.checked = true;
+        return;
+    }
+    checkbox.form.submit();
+}
+{% endblock %}

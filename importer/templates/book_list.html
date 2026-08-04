@@ -1,6 +1,5 @@
-{% if books|length > 0 %}
     {% for book, book_length in books %}
-        <div class="columns">
+        <div class="columns book-row" data-book-id="{{ book.pk }}" {% if show_progress %}data-poll-book="{{ book.pk }}" data-status-url="{% url 'book-status' book.pk %}"{% endif %}>
             {% if book.asin %}
             <div class="column is-one-quarter">
                 <div class="box">
@@ -22,9 +21,43 @@
             </div>
             <div class="column is-three-quarter">
                 <div class="box">
+                    <div class="level">
+                        <div class="level-left"></div>
+                        <div class="level-right">
+                            <div class="level-item">
+                                {% if show_progress %}
+                                <form action="{% url 'abandon-job' book.pk %}" method="POST" class="abandon-form">
+                                    {% csrf_token %}
+                                    <button class="button is-danger is-outlined is-small" type="submit">
+                                        <span class="icon"><i class="fas fa-ban"></i></span>
+                                        <span>Abandon</span>
+                                    </button>
+                                </form>
+                                {% elif clearable %}
+                                <form action="{% url 'clear-jobs' %}" method="POST" class="clear-entry-form">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="book_id" value="{{ book.pk }}">
+                                    <button class="button is-danger is-outlined is-small" type="submit">
+                                        <span class="icon"><i class="fas fa-trash"></i></span>
+                                        <span>Clear Entry</span>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% if show_progress %}
+                    <div class="content">
+                        <progress id="progress-{{ book.pk }}" class="progress is-link" value="{{ book.status.progress_percent }}" max="100">{{ book.status.progress_percent }}%</progress>
+                        <p id="stage-{{ book.pk }}">{{ book.status.stage|default:"Queued" }}</p>
+                        <div class="notification is-warning is-light stuck-warning" id="stuck-{{ book.pk }}" {% if not book.stuck %}style="display: none;"{% endif %}>
+                            <span class="stuck-message">This job may be stuck in the queue &mdash; no progress has been reported yet.</span>
+                        </div>
+                    </div>
+                    {% endif %}
                     <div class="content">
                         <span class="has-text-weight-semibold is-size-3">Description:</span>
-                        {% if book.status.status == 'Error' %}
+                        {% if book.status.status == 'Error' or book.status.status == 'Abandoned' %}
                         <p>{{ book.status.message }}</p>
                         {% else %}
                         <p>
@@ -38,8 +71,7 @@
             {% endif %}
         </div>
     {% endfor %}
-{% else %}
-    <div class="columns">
+    <div class="columns empty-state" {% if books %}style="display: none;"{% endif %}>
         <div class="column">
             <div class="box">
                 <div class="content has-text-centered">
@@ -48,5 +80,3 @@
             </div>
         </div>
     </div>
-{% endif %}
-

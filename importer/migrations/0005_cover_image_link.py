@@ -1,13 +1,25 @@
 from django.db import migrations, models
 from m4b_merge import audible_helper, config
 
-from utils.merge import set_configs
 
 def add_cover_image_link(apps, _):
+    # Use the historical models (schema-as-of-this-migration), not the
+    # live app models - importing utils.merge/Setting here would query
+    # columns added by later migrations that don't exist yet on a
+    # from-scratch install
     Book = apps.get_model("importer", "Book")
-    set_configs()
+    Setting = apps.get_model("importer", "Setting")
 
-    for book in Book.objects.all():
+    books = Book.objects.all()
+    if not books.exists():
+        return
+
+    existing_settings = Setting.objects.first()
+    if not existing_settings:
+        return
+    config.api_url = existing_settings.api_url
+
+    for book in books:
         metadata = audible_helper.BookData(book.asin).fetch_api_data(config.api_url)
         book.cover_image_link = metadata['image']
         book.save()

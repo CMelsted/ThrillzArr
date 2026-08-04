@@ -3,6 +3,7 @@
 /static/
 __pycache__/
 config/
+dev-data/
 env/
 venv/
 demo/

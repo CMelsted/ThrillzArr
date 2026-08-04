@@ -1,8 +1,9 @@
 import logging
-from pathlib import Path
 import uuid
 from django import template
 import os
+
+from utils.paths import importable_contents
 
 logger = logging.getLogger(__name__)
 register = template.Library()
@@ -16,6 +17,11 @@ def is_directory(path):
 @register.filter
 def basename(path):
     return os.path.basename(path)
+
+
+@register.filter
+def as_str(value):
+    return str(value)
 
 
 @register.filter
@@ -39,13 +45,14 @@ def generate_id(_):
 
 def directory_contents(path):
     """
-    Returns a list of files and subdirectories in the given path.
+    Returns a list of files and subdirectories in the given path,
+    excluding locations books get moved to after processing.
     """
-    return sorted(Path(path).iterdir(), key=os.path.getmtime, reverse=True)
+    return importable_contents(path)
 
 
 @register.inclusion_tag("directory_contents.html")
-def render_directory(path, folder_id, depth):
+def render_directory(path, folder_id, depth, hidden_paths):
     """
     Renders a directory and its contents as a nested list.
     """
@@ -56,4 +63,5 @@ def render_directory(path, folder_id, depth):
         "display": "none" if int(depth) > 0 else "",
         "folder_id": f"{folder_id}",
         "depth": depth,
+        "hidden_paths": hidden_paths,
     }
