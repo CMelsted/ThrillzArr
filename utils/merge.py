@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 from django.conf import settings
+from django.utils import timezone
 # core merge logic:
 from m4b_merge import audible_helper, config, helpers, m4b_helper
 
@@ -41,8 +42,10 @@ def set_configs(book=None):
 def _update_status(book, **fields):
     # Targeted UPDATE so concurrent writes (e.g. the abandon view setting
     # cancel_requested from the web process) are never clobbered by a
-    # stale in-memory save().
-    Status.objects.filter(pk=book.status.pk).update(**fields)
+    # stale in-memory save(). auto_now doesn't fire on queryset .update(),
+    # so updated_at is bumped explicitly here.
+    Status.objects.filter(pk=book.status.pk).update(
+        updated_at=timezone.now(), **fields)
 
 
 def _set_progress(book, percent, stage):

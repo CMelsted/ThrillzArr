@@ -1,8 +1,8 @@
-<div class="level">
+<div class="level" data-clear-all="{{ status }}" {% if not books %}style="display: none;"{% endif %}>
     <div class="level-left"></div>
     <div class="level-right">
         <div class="level-item">
-            <form action="{% url 'clear-jobs' %}" method="POST">
+            <form action="{% url 'clear-jobs' %}" method="POST" class="clear-all-form" data-status="{{ status }}">
                 {% csrf_token %}
                 <input type="hidden" name="clear_all" value="{{ status }}">
                 <button class="button is-danger" type="submit">

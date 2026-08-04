@@ -11,25 +11,19 @@
     </div>
 
     <div class="tab-content">
-        <div class="tab-pane" id="done">
-            {% if done_books %}
-            {% include "clear_all_button.html" with status="Done" %}
-            {% endif %}
+        <div class="tab-pane" id="done" data-clear-status="Done">
+            {% include "clear_all_button.html" with status="Done" books=done_books %}
             {% include "book_list.html" with books=done_books clearable=True %}
         </div>
         <div class="tab-pane" id="processing" style="display: none;">
             {% include "book_list.html" with books=processing_books show_progress=True %}
         </div>
-        <div class="tab-pane" id="error" style="display: none;">
-            {% if error_books %}
-            {% include "clear_all_button.html" with status="Error" %}
-            {% endif %}
+        <div class="tab-pane" id="error" style="display: none;" data-clear-status="Error">
+            {% include "clear_all_button.html" with status="Error" books=error_books %}
             {% include "book_list.html" with books=error_books clearable=True %}
         </div>
-        <div class="tab-pane" id="abandoned" style="display: none;">
-            {% if abandoned_books %}
-            {% include "clear_all_button.html" with status="Abandoned" %}
-            {% endif %}
+        <div class="tab-pane" id="abandoned" style="display: none;" data-clear-status="Abandoned">
+            {% include "clear_all_button.html" with status="Abandoned" books=abandoned_books %}
             {% include "book_list.html" with books=abandoned_books clearable=True %}
         </div>
     </div>

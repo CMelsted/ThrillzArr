@@ -11,6 +11,7 @@ from django.contrib import messages
 from django.http import HttpRequest, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.generic import TemplateView, View
 # core merge logic:
 from m4b_merge import audible_helper, helpers
@@ -31,6 +32,22 @@ from .tasks import m4b_merge_task
 
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
+
+
+def ajax_or_redirect(request, is_ajax, redirect_to, error=None, url=None, **extra):
+    """
+        Shared dual-path response: JSON for fetch()-driven requests (so the
+        caller can update the DOM in place without navigating), or the
+        classic messages+redirect fallback for plain form posts (JS
+        disabled).
+    """
+    if is_ajax:
+        payload = {'ok': error is None, 'error': error, 'url': url}
+        payload.update(extra)
+        return JsonResponse(payload)
+    if error:
+        messages.error(request, error)
+    return redirect(url) if url else redirect(redirect_to)
 
 
 class ImportView(TemplateView):
@@ -154,13 +171,8 @@ class ImportView(TemplateView):
 
     @staticmethod
     def _respond(request, is_ajax, error=None, url=None, **extra):
-        if is_ajax:
-            payload = {'ok': error is None, 'error': error, 'url': url}
-            payload.update(extra)
-            return JsonResponse(payload)
-        if error:
-            messages.error(request, error)
-        return redirect(url) if url else redirect("import")
+        return ajax_or_redirect(
+            request, is_ajax, "import", error=error, url=url, **extra)
 
 
 class ReviewView(TemplateView):
@@ -238,7 +250,7 @@ class ReviewView(TemplateView):
 
             result = m4b_merge_task.delay(book.asin)
             Status.objects.filter(pk=book.status.pk).update(
-                task_id=result.id)
+                task_id=result.id, updated_at=timezone.now())
             logger.info(f"Approved and queued book {book}")
             approved += 1
 
@@ -285,23 +297,40 @@ class EditBookView(TemplateView):
 class BookStatusView(View):
     def get(self, request, book_id):
         book = get_object_or_404(Book, pk=book_id)
-        return JsonResponse({
+        status = book.status
+        stuck = status.stuck
+        payload = {
             'id': book.pk,
-            'status': book.status.status,
-            'progress_percent': book.status.progress_percent,
-            'stage': book.status.stage,
-            'message': book.status.message,
-        })
+            'status': status.status,
+            'progress_percent': status.progress_percent,
+            'stage': status.stage,
+            'message': status.message,
+            'stuck': stuck,
+        }
+        if stuck:
+            # Only worth the extra broker round-trip once we already
+            # suspect the job is stuck, not on every 3s poll tick
+            payload['worker_alive'] = self._worker_alive()
+        return JsonResponse(payload)
+
+    @staticmethod
+    def _worker_alive() -> bool:
+        try:
+            replies = celery_app.control.inspect(timeout=1).ping()
+        except Exception:
+            return False
+        return bool(replies)
 
 
 class AbandonJobView(View):
     def post(self, request, book_id):
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
         book = get_object_or_404(Book, pk=book_id)
         status = book.status
 
         if status.status != StatusChoices.PROCESSING:
-            messages.error(request, "Job is not in progress")
-            return redirect("books")
+            return ajax_or_redirect(
+                request, is_ajax, "books", error="Job is not in progress")
 
         logger.info(f"Abandoning job for {book}")
         Status.objects.filter(pk=status.pk).update(
@@ -309,6 +338,7 @@ class AbandonJobView(View):
             status=StatusChoices.ABANDONED,
             message="Cancelled by user",
             stage='',
+            updated_at=timezone.now(),
         )
 
         # Kill the running m4b-tool process tree directly; the celery
@@ -325,8 +355,9 @@ class AbandonJobView(View):
         if status.task_id:
             celery_app.control.revoke(status.task_id)
 
-        messages.success(request, f"Abandoned job for {book.title}")
-        return redirect("books")
+        if not is_ajax:
+            messages.success(request, f"Abandoned job for {book.title}")
+        return ajax_or_redirect(request, is_ajax, "books", book_id=book.pk)
 
 
 class ClearJobsView(View):
@@ -335,20 +366,28 @@ class ClearJobsView(View):
                  StatusChoices.ABANDONED]
 
     def post(self, request):
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
         if clear_all := request.POST.get('clear_all'):
             if clear_all not in self.CLEARABLE:
+                if is_ajax:
+                    return JsonResponse(
+                        {'ok': False, 'error': "Unknown status"}, status=400)
                 return HttpResponseBadRequest("Unknown status")
             statuses = Status.objects.filter(status=clear_all)
+            book_ids = list(statuses.values_list('book__pk', flat=True))
         elif book_id := request.POST.get('book_id'):
             statuses = Status.objects.filter(
                 book__pk=book_id, status__in=self.CLEARABLE)
+            book_ids = [int(book_id)]
         else:
-            messages.error(request, "No books selected")
-            return redirect("books")
+            return ajax_or_redirect(
+                request, is_ajax, "books", error="No books selected")
 
         # Deleting the Status cascades to the Book
         statuses.delete()
-        return redirect("books")
+        return ajax_or_redirect(
+            request, is_ajax, "books", book_ids=book_ids)
 
 
 class AsinSearch(View):
@@ -489,8 +528,12 @@ class BookListView(TemplateView):
             context.update({"default_view": "processing"})
 
         for key, books in filter(lambda item: 'books' in item[0], kwargs.items()):
+            books = list(books)
+            if key == 'processing_books':
+                for book in books:
+                    book.stuck = book.status.stuck
             context.update(
-                {key: list(zip(books, self.calcBookLength(list(books))))})
+                {key: list(zip(books, self.calcBookLength(books)))})
 
         return context
 

@@ -1,4 +1,7 @@
+from datetime import timedelta
+
 from django.db import models
+from django.utils import timezone
 
 
 class BookManager(models.Manager):
@@ -23,6 +26,8 @@ class StatusChoices(models.TextChoices):
 
 
 class Status(models.Model):
+    STUCK_THRESHOLD = timedelta(seconds=60)
+
     status = models.CharField(max_length=20, choices=StatusChoices.choices)
     message = models.TextField()
     progress_percent = models.IntegerField(default=0)
@@ -30,9 +35,22 @@ class Status(models.Model):
     task_id = models.CharField(max_length=255, blank=True, default='')
     cancel_requested = models.BooleanField(default=False)
     pgid = models.IntegerField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self) -> str:
         return self.status
+
+    @property
+    def stuck(self) -> bool:
+        # A task that's actually running sets a non-empty stage within
+        # moments (see run_m4b_merge's first _set_progress call); Processing
+        # + empty stage past the threshold means no worker ever picked up
+        # the task (e.g. worker down, or the sqla+sqlite broker dropped it)
+        return (
+            self.status == StatusChoices.PROCESSING
+            and not self.stage
+            and timezone.now() - self.updated_at > self.STUCK_THRESHOLD
+        )
 
 
 class ConversionPreset(models.Model):

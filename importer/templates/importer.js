@@ -32,12 +32,12 @@ function showMatchError(message) {
     banner.style.display = message ? "block" : "none";
 }
 
-async function postAction(payload) {
+async function postToUrl(url, payload) {
     const csrfToken = document.querySelector('input[name="csrfmiddlewaretoken"]').value;
     const body = new URLSearchParams({ csrfmiddlewaretoken: csrfToken, ...payload });
 
     try {
-        const response = await fetch(IMPORT_URL, {
+        const response = await fetch(url, {
             method: "POST",
             headers: { "X-Requested-With": "XMLHttpRequest" },
             body: body,
@@ -46,6 +46,10 @@ async function postAction(payload) {
     } catch (error) {
         return { ok: false, error: `Could not reach the server: ${error}` };
     }
+}
+
+async function postAction(payload) {
+    return postToUrl(IMPORT_URL, payload);
 }
 
 function findTreeRow(srcPath) {
